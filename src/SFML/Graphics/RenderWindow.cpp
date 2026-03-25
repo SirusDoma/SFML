@@ -88,7 +88,7 @@ bool RenderWindow::setActive(bool active)
 
     // Update RenderTarget tracking
     if (result)
-        result = RenderTarget::setActive(active);
+        result = GlRenderTarget::setActive(active);
 
     // If FBOs are available, make sure none are bound when we
     // try to draw to the default framebuffer of the RenderWindow
@@ -114,7 +114,7 @@ void RenderWindow::onCreate()
     }
 
     // Just initialize the render target part
-    RenderTarget::initialize();
+    GlRenderTarget::initialize();
 }
 
 

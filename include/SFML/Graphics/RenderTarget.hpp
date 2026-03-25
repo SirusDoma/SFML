@@ -29,7 +29,6 @@
 ////////////////////////////////////////////////////////////
 #include <SFML/Graphics/Export.hpp>
 
-#include <SFML/Graphics/BlendMode.hpp>
 #include <SFML/Graphics/Color.hpp>
 #include <SFML/Graphics/CoordinateType.hpp>
 #include <SFML/Graphics/PrimitiveType.hpp>
@@ -41,8 +40,6 @@
 
 #include <SFML/System/Vector2.hpp>
 
-#include <array>
-
 #include <cstddef>
 #include <cstdint>
 
@@ -50,13 +47,10 @@
 namespace sf
 {
 class Drawable;
-class Shader;
-class Texture;
-class Transform;
 class VertexBuffer;
 
 ////////////////////////////////////////////////////////////
-/// \brief Base class for all render targets (window, texture, ...)
+/// \brief Abstract base class for all render targets (window, texture, ...)
 ///
 ////////////////////////////////////////////////////////////
 class SFML_GRAPHICS_API RenderTarget
@@ -101,7 +95,7 @@ public:
     /// \param color Fill color to use to clear the render target
     ///
     ////////////////////////////////////////////////////////////
-    void clear(Color color = Color::Black);
+    virtual void clear(Color color = Color::Black) = 0;
 
     ////////////////////////////////////////////////////////////
     /// \brief Clear the stencil buffer to a specific value
@@ -112,7 +106,7 @@ public:
     /// \param stencilValue Stencil value to clear to
     ///
     ////////////////////////////////////////////////////////////
-    void clearStencil(StencilValue stencilValue);
+    virtual void clearStencil(StencilValue stencilValue) = 0;
 
     ////////////////////////////////////////////////////////////
     /// \brief Clear the entire target with a single color and stencil value
@@ -124,7 +118,7 @@ public:
     /// \param stencilValue Stencil value to clear to
     ///
     ////////////////////////////////////////////////////////////
-    void clear(Color color, StencilValue stencilValue);
+    virtual void clear(Color color, StencilValue stencilValue) = 0;
 
     ////////////////////////////////////////////////////////////
     /// \brief Change the current active view
@@ -145,7 +139,7 @@ public:
     /// \see `getView`, `getDefaultView`
     ///
     ////////////////////////////////////////////////////////////
-    void setView(const View& view);
+    virtual void setView(const View& view);
 
     ////////////////////////////////////////////////////////////
     /// \brief Get the view currently in use in the render target
@@ -155,7 +149,7 @@ public:
     /// \see `setView`, `getDefaultView`
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] const View& getView() const;
+    [[nodiscard]] virtual const View& getView() const;
 
     ////////////////////////////////////////////////////////////
     /// \brief Get the default view of the render target
@@ -305,7 +299,7 @@ public:
     /// \param states   Render states to use for drawing
     ///
     ////////////////////////////////////////////////////////////
-    void draw(const Drawable& drawable, const RenderStates& states = RenderStates::Default);
+    virtual void draw(const Drawable& drawable, const RenderStates& states = RenderStates::Default);
 
     ////////////////////////////////////////////////////////////
     /// \brief Draw primitives defined by an array of vertices
@@ -316,10 +310,10 @@ public:
     /// \param states      Render states to use for drawing
     ///
     ////////////////////////////////////////////////////////////
-    void draw(const Vertex*       vertices,
-              std::size_t         vertexCount,
-              PrimitiveType       type,
-              const RenderStates& states = RenderStates::Default);
+    virtual void draw(const Vertex*       vertices,
+                      std::size_t         vertexCount,
+                      PrimitiveType       type,
+                      const RenderStates& states = RenderStates::Default) = 0;
 
     ////////////////////////////////////////////////////////////
     /// \brief Draw primitives defined by a vertex buffer
@@ -328,7 +322,7 @@ public:
     /// \param states       Render states to use for drawing
     ///
     ////////////////////////////////////////////////////////////
-    void draw(const VertexBuffer& vertexBuffer, const RenderStates& states = RenderStates::Default);
+    virtual void draw(const VertexBuffer& vertexBuffer, const RenderStates& states = RenderStates::Default);
 
     ////////////////////////////////////////////////////////////
     /// \brief Draw primitives defined by a vertex buffer
@@ -339,10 +333,10 @@ public:
     /// \param states       Render states to use for drawing
     ///
     ////////////////////////////////////////////////////////////
-    void draw(const VertexBuffer& vertexBuffer,
-              std::size_t         firstVertex,
-              std::size_t         vertexCount,
-              const RenderStates& states = RenderStates::Default);
+    virtual void draw(const VertexBuffer& vertexBuffer,
+                      std::size_t         firstVertex,
+                      std::size_t         vertexCount,
+                      const RenderStates& states = RenderStates::Default) = 0;
 
     ////////////////////////////////////////////////////////////
     /// \brief Return the size of the rendering region of the target
@@ -360,96 +354,6 @@ public:
     ////////////////////////////////////////////////////////////
     [[nodiscard]] virtual bool isSrgb() const;
 
-    ////////////////////////////////////////////////////////////
-    /// \brief Activate or deactivate the render target for rendering
-    ///
-    /// This function makes the render target's context current for
-    /// future OpenGL rendering operations (so you shouldn't care
-    /// about it if you're not doing direct OpenGL stuff).
-    /// A render target's context is active only on the current thread,
-    /// if you want to make it active on another thread you have
-    /// to deactivate it on the previous thread first if it was active.
-    /// Only one context can be current in a thread, so if you
-    /// want to draw OpenGL geometry to another render target
-    /// don't forget to activate it again. Activating a render
-    /// target will automatically deactivate the previously active
-    /// context (if any).
-    ///
-    /// \param active `true` to activate, `false` to deactivate
-    ///
-    /// \return `true` if operation was successful, `false` otherwise
-    ///
-    ////////////////////////////////////////////////////////////
-    [[nodiscard]] virtual bool setActive(bool active = true);
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Save the current OpenGL render states and matrices
-    ///
-    /// This function can be used when you mix SFML drawing
-    /// and direct OpenGL rendering. Combined with popGLStates,
-    /// it ensures that:
-    /// \li SFML's internal states are not messed up by your OpenGL code
-    /// \li your OpenGL states are not modified by a call to a SFML function
-    ///
-    /// More specifically, it must be used around code that
-    /// calls `draw` functions. Example:
-    /// \code
-    /// // OpenGL code here...
-    /// window.pushGLStates();
-    /// window.draw(...);
-    /// window.draw(...);
-    /// window.popGLStates();
-    /// // OpenGL code here...
-    /// \endcode
-    ///
-    /// Note that this function is quite expensive: it saves all the
-    /// possible OpenGL states and matrices, even the ones you
-    /// don't care about. Therefore it should be used wisely.
-    /// It is provided for convenience, but the best results will
-    /// be achieved if you handle OpenGL states yourself (because
-    /// you know which states have really changed, and need to be
-    /// saved and restored). Take a look at the resetGLStates
-    /// function if you do so.
-    ///
-    /// \see `popGLStates`
-    ///
-    ////////////////////////////////////////////////////////////
-    void pushGLStates();
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Restore the previously saved OpenGL render states and matrices
-    ///
-    /// See the description of `pushGLStates` to get a detailed
-    /// description of these functions.
-    ///
-    /// \see `pushGLStates`
-    ///
-    ////////////////////////////////////////////////////////////
-    void popGLStates();
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Reset the internal OpenGL states so that the target is ready for drawing
-    ///
-    /// This function can be used when you mix SFML drawing
-    /// and direct OpenGL rendering, if you choose not to use
-    /// `pushGLStates`/`popGLStates`. It makes sure that all OpenGL
-    /// states needed by SFML are set, so that subsequent `draw()`
-    /// calls will work as expected.
-    ///
-    /// Example:
-    /// \code
-    /// // OpenGL code here...
-    /// glPushAttrib(...);
-    /// window.resetGLStates();
-    /// window.draw(...);
-    /// window.draw(...);
-    /// glPopAttrib(...);
-    /// // OpenGL code here...
-    /// \endcode
-    ///
-    ////////////////////////////////////////////////////////////
-    void resetGLStates();
-
 protected:
     ////////////////////////////////////////////////////////////
     /// \brief Default constructor
@@ -464,110 +368,14 @@ protected:
     /// target is created and ready for drawing.
     ///
     ////////////////////////////////////////////////////////////
-    void initialize();
+    virtual void initialize();
 
 private:
     ////////////////////////////////////////////////////////////
-    /// \brief Apply the current view
-    ///
-    ////////////////////////////////////////////////////////////
-    void applyCurrentView();
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Apply a new blending mode
-    ///
-    /// \param mode Blending mode to apply
-    ///
-    ////////////////////////////////////////////////////////////
-    void applyBlendMode(const BlendMode& mode);
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Apply a new stencil mode
-    ///
-    /// \param mode Stencil mode to apply
-    ///
-    ////////////////////////////////////////////////////////////
-    void applyStencilMode(const StencilMode& mode);
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Apply a new transform
-    ///
-    /// \param transform Transform to apply
-    ///
-    ////////////////////////////////////////////////////////////
-    void applyTransform(const Transform& transform);
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Apply a new texture
-    ///
-    /// \param texture        Texture to apply
-    /// \param coordinateType The texture coordinate type to use
-    ///
-    ////////////////////////////////////////////////////////////
-    void applyTexture(const Texture* texture, CoordinateType coordinateType = CoordinateType::Pixels);
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Apply a new shader
-    ///
-    /// \param shader Shader to apply
-    ///
-    ////////////////////////////////////////////////////////////
-    void applyShader(const Shader* shader);
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Setup environment for drawing
-    ///
-    /// \param useVertexCache Are we going to use the vertex cache?
-    /// \param states         Render states to use for drawing
-    ///
-    ////////////////////////////////////////////////////////////
-    void setupDraw(bool useVertexCache, const RenderStates& states);
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Draw the primitives
-    ///
-    /// \param type        Type of primitives to draw
-    /// \param firstVertex Index of the first vertex to use when drawing
-    /// \param vertexCount Number of vertices to use when drawing
-    ///
-    ////////////////////////////////////////////////////////////
-    void drawPrimitives(PrimitiveType type, std::size_t firstVertex, std::size_t vertexCount);
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Clean up environment after drawing
-    ///
-    /// \param states Render states used for drawing
-    ///
-    ////////////////////////////////////////////////////////////
-    void cleanupDraw(const RenderStates& states);
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Render states cache
-    ///
-    ////////////////////////////////////////////////////////////
-    struct StatesCache
-    {
-        bool                  enable{};                //!< Is the cache enabled?
-        bool                  glStatesSet{};           //!< Are our internal GL states set yet?
-        bool                  viewChanged{};           //!< Has the current view changed since last draw?
-        bool                  scissorEnabled{};        //!< Is scissor testing enabled?
-        bool                  stencilEnabled{};        //!< Is stencil testing enabled?
-        BlendMode             lastBlendMode;           //!< Cached blending mode
-        StencilMode           lastStencilMode;         //!< Cached stencil
-        std::uint64_t         lastTextureId{};         //!< Cached texture
-        CoordinateType        lastCoordinateType{};    //!< Texture coordinate type
-        bool                  texCoordsArrayEnabled{}; //!< Is `GL_TEXTURE_COORD_ARRAY` client state enabled?
-        bool                  useVertexCache{};        //!< Did we previously use the vertex cache?
-        std::array<Vertex, 4> vertexCache{};           //!< Pre-transformed vertices cache
-    };
-
-    ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    View          m_defaultView; //!< Default view
-    View          m_view;        //!< Current view
-    StatesCache   m_cache{};     //!< Render states cache
-    std::uint64_t m_id{};        //!< Unique number that identifies the RenderTarget
+    View m_defaultView; //!< Default view
+    View m_view;        //!< Current view
 };
 
 } // namespace sf
@@ -589,18 +397,12 @@ private:
 /// documentation of `sf::View` for more details and sample pieces of
 /// code about this class.
 ///
-/// On top of that, render targets are still able to render direct
-/// OpenGL stuff. It is even possible to mix together OpenGL calls
-/// and regular SFML drawing commands. When doing so, make sure that
-/// OpenGL states are not messed up by calling the
-/// `pushGLStates`/`popGLStates` functions.
+/// To create a custom render target, inherit from this class
+/// and implement the pure virtual methods. If you need
+/// OpenGL-based rendering, consider inheriting from
+/// `sf::GlRenderTarget` instead, which provides a ready-made
+/// OpenGL implementation.
 ///
-/// While render targets are moveable, it is not valid to move them
-/// between threads. This will cause your program to crash. The
-/// problem boils down to OpenGL being limited with regard to how it
-/// works in multithreaded environments. Please ensure you only move
-/// render targets within the same thread.
-///
-/// \see `sf::RenderWindow`, `sf::RenderTexture`, `sf::View`
+/// \see `sf::GlRenderTarget`, `sf::RenderWindow`, `sf::RenderTexture`, `sf::View`
 ///
 ////////////////////////////////////////////////////////////

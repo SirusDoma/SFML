@@ -30,6 +30,8 @@ set(SRC
     ${INCROOT}/RenderTexture.hpp
     ${SRCROOT}/RenderTarget.cpp
     ${INCROOT}/RenderTarget.hpp
+    ${SRCROOT}/GlRenderTarget.cpp
+    ${INCROOT}/GlRenderTarget.hpp
     ${SRCROOT}/RenderWindow.cpp
     ${INCROOT}/RenderWindow.hpp
     ${SRCROOT}/Shader.cpp

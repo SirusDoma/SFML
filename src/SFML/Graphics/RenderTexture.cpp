@@ -99,7 +99,7 @@ bool RenderTexture::resize(Vector2u size, const ContextSettings& settings)
         return false;
 
     // We can now initialize the render target part
-    RenderTarget::initialize();
+    GlRenderTarget::initialize();
 
     return true;
 }
@@ -157,7 +157,7 @@ bool RenderTexture::setActive(bool active)
 {
     // Update RenderTarget tracking
     if (m_impl && m_impl->activate(active))
-        return RenderTarget::setActive(active);
+        return GlRenderTarget::setActive(active);
 
     return false;
 }
@@ -172,7 +172,7 @@ void RenderTexture::display()
     if (priv::RenderTextureImplFBO::isAvailable())
     {
         // Perform a RenderTarget-only activation if we are using FBOs
-        if (!RenderTarget::setActive())
+        if (!GlRenderTarget::setActive())
             return;
     }
     else

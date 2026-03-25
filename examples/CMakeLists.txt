@@ -22,6 +22,7 @@ if(SFML_BUILD_WINDOW)
 endif()
 
 if(SFML_BUILD_GRAPHICS)
+    add_subdirectory(custom_render_target)
     add_subdirectory(event_handling)
     add_subdirectory(opengl)
     add_subdirectory(stencil)

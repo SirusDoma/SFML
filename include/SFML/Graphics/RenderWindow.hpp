@@ -29,7 +29,7 @@
 ////////////////////////////////////////////////////////////
 #include <SFML/Graphics/Export.hpp>
 
-#include <SFML/Graphics/RenderTarget.hpp>
+#include <SFML/Graphics/GlRenderTarget.hpp>
 
 #include <SFML/Window/ContextSettings.hpp>
 #include <SFML/Window/VideoMode.hpp>
@@ -51,7 +51,7 @@ class String;
 /// \brief Window that can serve as a target for 2D drawing
 ///
 ////////////////////////////////////////////////////////////
-class SFML_GRAPHICS_API RenderWindow : public Window, public RenderTarget
+class SFML_GRAPHICS_API RenderWindow : public Window, public GlRenderTarget
 {
 public:
     ////////////////////////////////////////////////////////////

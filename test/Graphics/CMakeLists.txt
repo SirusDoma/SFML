@@ -14,6 +14,7 @@ set(GRAPHICS_SRC
     RectangleShape.test.cpp
     Render.test.cpp
     RenderStates.test.cpp
+    GlRenderTarget.test.cpp
     RenderTarget.test.cpp
     RenderTexture.test.cpp
     RenderWindow.test.cpp

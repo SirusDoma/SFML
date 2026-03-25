@@ -29,7 +29,7 @@
 ////////////////////////////////////////////////////////////
 #include <SFML/Graphics/Export.hpp>
 
-#include <SFML/Graphics/RenderTarget.hpp>
+#include <SFML/Graphics/GlRenderTarget.hpp>
 #include <SFML/Graphics/Texture.hpp>
 
 #include <SFML/Window/ContextSettings.hpp>
@@ -50,7 +50,7 @@ class RenderTextureImpl;
 /// \brief Target for off-screen 2D rendering into a texture
 ///
 ////////////////////////////////////////////////////////////
-class SFML_GRAPHICS_API RenderTexture : public RenderTarget
+class SFML_GRAPHICS_API RenderTexture : public GlRenderTarget
 {
 public:
     ////////////////////////////////////////////////////////////

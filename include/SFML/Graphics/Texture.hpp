@@ -44,6 +44,7 @@
 
 namespace sf
 {
+class GlRenderTarget;
 class InputStream;
 class Window;
 class Image;
@@ -714,7 +715,7 @@ public:
 private:
     friend class Text;
     friend class RenderTexture;
-    friend class RenderTarget;
+    friend class GlRenderTarget;
 
     ////////////////////////////////////////////////////////////
     /// \brief Get a valid image size according to hardware support
