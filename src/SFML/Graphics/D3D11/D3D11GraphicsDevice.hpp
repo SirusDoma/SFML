@@ -412,29 +412,21 @@ public:
     [[nodiscard]] ID3D11Buffer* getStreamVertexBuffer() const;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Upload triangle-fan indices to the streaming index buffer
+    /// \brief Get the shared triangle-fan index buffer
     ///
     /// Direct3D 11 has no triangle-fan topology, fans are drawn as
-    /// an indexed triangle list instead.
+    /// an indexed triangle list instead. All fans share one index
+    /// pattern (0, i + 1, i + 2): smaller fans draw a prefix of it
+    /// and the fan's first vertex is applied through the base
+    /// vertex location of the draw call.
     ///
-    /// \param firstVertex Index of the fan's first vertex
     /// \param vertexCount Number of vertices in the fan
-    /// \param firstIndex  Location of the first index in the buffer
-    /// \param indexCount  Number of indices written
+    /// \param indexCount  Number of indices to draw
     ///
-    /// \return `true` if the upload succeeded
-    ///
-    ////////////////////////////////////////////////////////////
-    [[nodiscard]] bool uploadTriangleFanIndices(std::size_t  firstVertex,
-                                                std::size_t  vertexCount,
-                                                std::size_t& firstIndex,
-                                                std::size_t& indexCount);
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Get the streaming index buffer
+    /// \return The index buffer, or a null pointer on failure
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] ID3D11Buffer* getStreamIndexBuffer() const;
+    [[nodiscard]] ID3D11Buffer* getTriangleFanIndexBuffer(std::size_t vertexCount, std::size_t& indexCount);
 
 private:
     ////////////////////////////////////////////////////////////
@@ -469,9 +461,8 @@ private:
     ComPtr<ID3D11Buffer> m_streamVertexBuffer;         //!< Growable streaming vertex buffer
     std::size_t          m_streamVertexBufferSize{};   //!< Capacity of the streaming vertex buffer, in vertices
     std::size_t          m_streamVertexBufferCursor{}; //!< Append position in the streaming vertex buffer
-    ComPtr<ID3D11Buffer> m_streamIndexBuffer;          //!< Growable streaming index buffer for triangle fans
-    std::size_t          m_streamIndexBufferSize{};    //!< Capacity of the streaming index buffer, in indices
-    std::size_t          m_streamIndexBufferCursor{};  //!< Append position in the streaming index buffer
+    ComPtr<ID3D11Buffer> m_fanIndexBuffer;             //!< Index buffer holding the shared triangle-fan pattern
+    std::size_t          m_fanIndexBufferVertices{};   //!< Largest fan vertex count the pattern covers
 
     std::unordered_map<std::uint32_t, ComPtr<ID3D11BlendState>> m_blendStates; //!< Cache of blend state objects, keyed by packed blend mode
     std::unordered_map<std::uint32_t, ComPtr<ID3D11DepthStencilState>> m_depthStencilStates; //!< Cache of depth-stencil state objects, keyed by packed stencil mode

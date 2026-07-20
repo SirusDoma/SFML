@@ -40,6 +40,7 @@
 #include <d3dcompiler.h>
 #include <memory>
 #include <ostream>
+#include <vector>
 
 #include <cstring>
 
@@ -725,67 +726,47 @@ ID3D11Buffer* D3D11GraphicsDevice::getStreamVertexBuffer() const
 
 
 ////////////////////////////////////////////////////////////
-bool D3D11GraphicsDevice::uploadTriangleFanIndices(std::size_t  firstVertex,
-                                                   std::size_t  vertexCount,
-                                                   std::size_t& firstIndex,
-                                                   std::size_t& indexCount)
+ID3D11Buffer* D3D11GraphicsDevice::getTriangleFanIndexBuffer(std::size_t vertexCount, std::size_t& indexCount)
 {
     const ContextLock lock(*this);
 
-    if (!m_device || !m_context || (vertexCount < 3))
-        return false;
+    if (!m_device || (vertexCount < 3))
+        return nullptr;
 
     indexCount = (vertexCount - 2) * 3;
 
-    if (indexCount > m_streamIndexBufferSize)
+    // Grow the shared pattern, fans of any size draw a prefix of the same index list
+    if (vertexCount > m_fanIndexBufferVertices)
     {
-        const std::size_t newSize = std::max<std::size_t>({indexCount, m_streamIndexBufferSize * 2, 4096});
+        const std::size_t newVertices = std::max<std::size_t>({vertexCount, m_fanIndexBufferVertices * 2, 1024});
+
+        std::vector<std::uint32_t> indices((newVertices - 2) * 3);
+        for (std::size_t i = 0; i < newVertices - 2; ++i)
+        {
+            indices[i * 3 + 0] = 0;
+            indices[i * 3 + 1] = static_cast<std::uint32_t>(i + 1);
+            indices[i * 3 + 2] = static_cast<std::uint32_t>(i + 2);
+        }
 
         D3D11_BUFFER_DESC desc{};
-        desc.ByteWidth      = static_cast<UINT>(sizeof(std::uint32_t) * newSize);
-        desc.Usage          = D3D11_USAGE_DYNAMIC;
-        desc.BindFlags      = D3D11_BIND_INDEX_BUFFER;
-        desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        desc.ByteWidth = static_cast<UINT>(sizeof(std::uint32_t) * indices.size());
+        desc.Usage     = D3D11_USAGE_IMMUTABLE;
+        desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
 
-        m_streamIndexBuffer.Reset();
-        if (!d3dCheck(m_device->CreateBuffer(&desc, nullptr, &m_streamIndexBuffer)))
-            return false;
+        D3D11_SUBRESOURCE_DATA data{};
+        data.pSysMem = indices.data();
 
-        m_streamIndexBufferSize   = newSize;
-        m_streamIndexBufferCursor = 0;
+        m_fanIndexBuffer.Reset();
+        if (!d3dCheck(m_device->CreateBuffer(&desc, &data, &m_fanIndexBuffer)))
+        {
+            m_fanIndexBufferVertices = 0;
+            return nullptr;
+        }
+
+        m_fanIndexBufferVertices = newVertices;
     }
 
-    D3D11_MAP mapType = D3D11_MAP_WRITE_NO_OVERWRITE;
-    if (m_streamIndexBufferCursor + indexCount > m_streamIndexBufferSize)
-    {
-        m_streamIndexBufferCursor = 0;
-        mapType                   = D3D11_MAP_WRITE_DISCARD;
-    }
-
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    if (!d3dCheck(m_context->Map(m_streamIndexBuffer.Get(), 0, mapType, 0, &mapped)))
-        return false;
-
-    auto* indices = static_cast<std::uint32_t*>(mapped.pData) + m_streamIndexBufferCursor;
-    for (std::size_t i = 0; i < vertexCount - 2; ++i)
-    {
-        indices[i * 3 + 0] = static_cast<std::uint32_t>(firstVertex);
-        indices[i * 3 + 1] = static_cast<std::uint32_t>(firstVertex + i + 1);
-        indices[i * 3 + 2] = static_cast<std::uint32_t>(firstVertex + i + 2);
-    }
-    m_context->Unmap(m_streamIndexBuffer.Get(), 0);
-
-    firstIndex = m_streamIndexBufferCursor;
-    m_streamIndexBufferCursor += indexCount;
-
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////
-ID3D11Buffer* D3D11GraphicsDevice::getStreamIndexBuffer() const
-{
-    return m_streamIndexBuffer.Get();
+    return m_fanIndexBuffer.Get();
 }
 
 

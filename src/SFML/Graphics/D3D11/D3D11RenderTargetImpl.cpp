@@ -502,14 +502,14 @@ void D3D11RenderTargetImpl::drawPrimitives(PrimitiveType type, std::size_t first
     // Direct3D has no triangle-fan topology, draw fans as an indexed triangle list
     if (type == PrimitiveType::TriangleFan)
     {
-        std::size_t firstIndex = 0;
-        std::size_t indexCount = 0;
-        if (!m_device.uploadTriangleFanIndices(firstVertex, vertexCount, firstIndex, indexCount))
+        std::size_t indexCount  = 0;
+        auto*       indexBuffer = m_device.getTriangleFanIndexBuffer(vertexCount, indexCount);
+        if (!indexBuffer)
             return;
 
-        context->IASetIndexBuffer(m_device.getStreamIndexBuffer(), DXGI_FORMAT_R32_UINT, 0);
+        context->IASetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
         context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        context->DrawIndexed(static_cast<UINT>(indexCount), static_cast<UINT>(firstIndex), 0);
+        context->DrawIndexed(static_cast<UINT>(indexCount), 0, static_cast<INT>(firstVertex));
         return;
     }
 
