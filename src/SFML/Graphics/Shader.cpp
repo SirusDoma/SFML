@@ -27,7 +27,6 @@
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Graphics/GraphicsDevice.hpp>
-#include <SFML/Graphics/OpenGL/GlShaderImpl.hpp>
 #include <SFML/Graphics/Shader.hpp>
 #include <SFML/Graphics/ShaderImpl.hpp>
 
@@ -576,14 +575,14 @@ unsigned int Shader::getNativeHandle() const
 ////////////////////////////////////////////////////////////
 bool Shader::isAvailable()
 {
-    return priv::GlShaderImpl::isAvailable();
+    return priv::ensureGraphicsDevice()->isShaderAvailable();
 }
 
 
 ////////////////////////////////////////////////////////////
 bool Shader::isGeometryAvailable()
 {
-    return priv::GlShaderImpl::isGeometryAvailable();
+    return priv::ensureGraphicsDevice()->isGeometryShaderAvailable();
 }
 
 

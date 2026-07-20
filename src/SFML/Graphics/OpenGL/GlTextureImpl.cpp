@@ -339,7 +339,7 @@ void GlTextureImpl::update(const Image& image, const IntRect& rectangle, bool sm
 
 
 ////////////////////////////////////////////////////////////
-bool GlTextureImpl::update(const Window& window, Vector2u dest, bool smooth)
+bool GlTextureImpl::update(const Window& window, Vector2u dest, bool smooth, bool& pixelsFlipped)
 {
     if (!window.setActive(true))
     {
@@ -366,6 +366,9 @@ bool GlTextureImpl::update(const Window& window, Vector2u dest, bool smooth)
     // Force an OpenGL flush, so that the texture will appear updated
     // in all contexts immediately (solves problems in multi-threaded apps)
     glCheck(glFlush());
+
+    // glCopyTexSubImage2D copies the back buffer bottom-up
+    pixelsFlipped = true;
 
     return true;
 }

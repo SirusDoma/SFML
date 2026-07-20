@@ -12,6 +12,7 @@
 #include <mutex>
 #include <queue>
 #include <sstream>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -70,6 +71,17 @@ float snowcapHeight = 0.6f;
 float heightFactor  = static_cast<float>(windowSize.y) / 2.0f;
 float heightFlatten = 3.0f;
 float lightFactor   = 0.7f;
+
+
+////////////////////////////////////////////////////////////
+/// Shading language helper, the shader sources are provided
+/// in the language the active backend consumes.
+///
+////////////////////////////////////////////////////////////
+bool useHlsl()
+{
+    return sf::getShadingLanguage() == sf::ShadingLanguage::Hlsl;
+}
 
 
 ////////////////////////////////////////////////////////////
@@ -424,10 +436,16 @@ void generateTerrain(sf::Vertex* buffer)
 /// \return Application exit code
 ///
 ////////////////////////////////////////////////////////////
-int main()
+int main(int argc, char* argv[])
 {
+    // Use the Direct3D 11 backend when it is available, pass "gl" to force OpenGL
+    if (!(argc > 1 && std::string(argv[1]) == "gl") && !sf::setGraphicsBackend(sf::GraphicsBackend::Direct3D11))
+        std::cerr << "Direct3D 11 is not available, running on OpenGL instead" << std::endl;
+
     // Create the window of the application
-    sf::RenderWindow window(sf::VideoMode(windowSize), "SFML Island", sf::Style::Titlebar | sf::Style::Close);
+    sf::RenderWindow window(sf::VideoMode(windowSize),
+                            useHlsl() ? "SFML Island (Direct3D 11)" : "SFML Island (OpenGL)",
+                            sf::Style::Titlebar | sf::Style::Close);
     window.setVerticalSyncEnabled(true);
 
     const sf::Font font("resources/tuffy.ttf");
@@ -454,12 +472,16 @@ int main()
     // Staging buffer for our terrain data that we will upload to our VertexBuffer
     std::vector<sf::Vertex> terrainStagingBuffer;
 
+    // Keep track of whether the terrain shader could be loaded
+    bool terrainShaderLoaded = false;
+
     // Set up our graphics resources and set the status text accordingly
     if (!sf::VertexBuffer::isAvailable() || !sf::Shader::isAvailable())
     {
         statusText.setString("Shaders and/or Vertex Buffers Unsupported");
     }
-    else if (!terrainShader.loadFromFile("resources/terrain.vert", "resources/terrain.frag"))
+    else if (useHlsl() ? !terrainShader.loadFromFile("resources/terrain-vs.hlsl", "resources/terrain-ps.hlsl")
+                       : !terrainShader.loadFromFile("resources/terrain.vert", "resources/terrain.frag"))
     {
         statusText.setString("Failed to load shader program");
     }
@@ -488,6 +510,8 @@ int main()
 
         // Set up the render states
         terrainStates = sf::RenderStates(&terrainShader);
+
+        terrainShaderLoaded = true;
     }
 
     // Center the status text
@@ -525,8 +549,8 @@ int main()
             }
 
             // Arrow key pressed:
-            // TODO Replace use of getNativeHandle() when validity function is added
-            if (terrainShader.getNativeHandle() != 0 && event->is<sf::Event::KeyPressed>())
+            // TODO Replace use of terrainShaderLoaded when validity function is added
+            if (terrainShaderLoaded && event->is<sf::Event::KeyPressed>())
             {
                 switch (event->getIf<sf::Event::KeyPressed>()->code)
                 {
@@ -556,7 +580,7 @@ int main()
 
         window.draw(statusText);
 
-        if (terrainShader.getNativeHandle() != 0)
+        if (terrainShaderLoaded)
         {
             {
                 const std::lock_guard lock(workQueueMutex);

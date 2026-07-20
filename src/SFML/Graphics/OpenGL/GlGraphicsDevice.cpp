@@ -99,6 +99,34 @@ unsigned int GlGraphicsDevice::getMaximumAntiAliasingLevel()
 
 
 ////////////////////////////////////////////////////////////
+unsigned int GlGraphicsDevice::getMaximumTextureSize()
+{
+    return GlTextureImpl::getMaximumSize();
+}
+
+
+////////////////////////////////////////////////////////////
+bool GlGraphicsDevice::isShaderAvailable()
+{
+    return GlShaderImpl::isAvailable();
+}
+
+
+////////////////////////////////////////////////////////////
+bool GlGraphicsDevice::isGeometryShaderAvailable()
+{
+    return GlShaderImpl::isGeometryAvailable();
+}
+
+
+////////////////////////////////////////////////////////////
+bool GlGraphicsDevice::isVertexBufferAvailable()
+{
+    return GlVertexBufferImpl::isAvailable();
+}
+
+
+////////////////////////////////////////////////////////////
 GraphicsBackend GlGraphicsDevice::getBackend() const
 {
     return GraphicsBackend::OpenGL;

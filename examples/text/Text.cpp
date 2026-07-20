@@ -8,7 +8,9 @@
 #include <array>
 #include <chrono>
 #include <filesystem>
+#include <iostream>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -633,9 +635,16 @@ struct DemoText
 /// \return Application exit code
 ///
 ////////////////////////////////////////////////////////////
-int main()
+int main(int argc, char* argv[])
 {
-    sf::RenderWindow window(sf::VideoMode({windowWidth, 800u}), "SFML Text", sf::Style::Titlebar | sf::Style::Close);
+    // Use the Direct3D 11 backend when it is available, pass "gl" to force OpenGL
+    if (!(argc > 1 && std::string(argv[1]) == "gl") && !sf::setGraphicsBackend(sf::GraphicsBackend::Direct3D11))
+        std::cerr << "Direct3D 11 is not available, running on OpenGL instead" << std::endl;
+
+    sf::RenderWindow window(sf::VideoMode({windowWidth, 800u}),
+                            sf::getGraphicsBackend() == sf::GraphicsBackend::Direct3D11 ? "SFML Text (Direct3D 11)"
+                                                                                        : "SFML Text (OpenGL)",
+                            sf::Style::Titlebar | sf::Style::Close);
     window.setVerticalSyncEnabled(true);
 
     const sf::Font font(resourcesDir() / "tuffy.ttf");

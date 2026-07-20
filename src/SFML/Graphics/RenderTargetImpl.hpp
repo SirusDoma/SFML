@@ -28,7 +28,9 @@
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Graphics/RenderTarget.hpp>
+#include <SFML/Graphics/Shader.hpp>
 #include <SFML/Graphics/Texture.hpp>
+#include <SFML/Graphics/VertexBuffer.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -213,6 +215,19 @@ protected:
     }
 
     ////////////////////////////////////////////////////////////
+    /// \brief Get the backend implementation of a render target
+    ///
+    /// \param target Render target to access
+    ///
+    /// \return Pointer to the implementation, null if the target was moved away
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] static RenderTargetImpl* getImpl(RenderTarget& target)
+    {
+        return target.m_impl.get();
+    }
+
+    ////////////////////////////////////////////////////////////
     /// \brief Get the cache id of a texture
     ///
     /// \param texture Texture to access
@@ -236,6 +251,58 @@ protected:
     [[nodiscard]] static bool isTextureFboAttachment(const Texture& texture)
     {
         return texture.m_fboAttachment;
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Check whether a texture has a generated mipmap
+    ///
+    /// \param texture Texture to access
+    ///
+    /// \return `true` if the texture currently has a mipmap
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] static bool hasTextureMipmap(const Texture& texture)
+    {
+        return texture.m_hasMipmap;
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Get the backend implementation of a texture
+    ///
+    /// \param texture Texture to access
+    ///
+    /// \return Pointer to the implementation, null if no texture was created
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] static TextureImpl* getTextureImpl(const Texture& texture)
+    {
+        return texture.m_impl.get();
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Get the backend implementation of a shader
+    ///
+    /// \param shader Shader to access
+    ///
+    /// \return Pointer to the implementation, null if no shader was loaded
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] static ShaderImpl* getShaderImpl(const Shader& shader)
+    {
+        return shader.m_impl.get();
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Get the backend implementation of a vertex buffer
+    ///
+    /// \param vertexBuffer Vertex buffer to access
+    ///
+    /// \return Pointer to the implementation, null if no buffer was created
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] static VertexBufferImpl* getVertexBufferImpl(const VertexBuffer& vertexBuffer)
+    {
+        return vertexBuffer.m_impl.get();
     }
 };
 

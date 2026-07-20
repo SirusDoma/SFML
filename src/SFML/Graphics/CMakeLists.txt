@@ -8,6 +8,8 @@ set(SRC
     ${INCROOT}/Color.hpp
     ${INCROOT}/Color.inl
     ${INCROOT}/CoordinateType.hpp
+    ${INCROOT}/D3D11Interop.hpp
+    ${SRCROOT}/D3D11Interop.cpp
     ${INCROOT}/Export.hpp
     ${SRCROOT}/Font.cpp
     ${INCROOT}/Font.hpp
@@ -103,11 +105,39 @@ set(OPENGL_SRC
 )
 source_group("opengl" FILES ${OPENGL_SRC})
 
+# Direct3D 11 backend sources
+if(SFML_OS_WINDOWS AND SFML_ENABLE_D3D11)
+    set(D3D11_SRC
+        ${SRCROOT}/D3D11/D3D11GraphicsDevice.cpp
+        ${SRCROOT}/D3D11/D3D11GraphicsDevice.hpp
+        ${SRCROOT}/D3D11/D3D11RenderTargetImpl.cpp
+        ${SRCROOT}/D3D11/D3D11RenderTargetImpl.hpp
+        ${SRCROOT}/D3D11/D3D11RenderTextureImpl.cpp
+        ${SRCROOT}/D3D11/D3D11RenderTextureImpl.hpp
+        ${SRCROOT}/D3D11/D3D11RenderWindowImpl.cpp
+        ${SRCROOT}/D3D11/D3D11RenderWindowImpl.hpp
+        ${SRCROOT}/D3D11/D3D11ShaderImpl.cpp
+        ${SRCROOT}/D3D11/D3D11ShaderImpl.hpp
+        ${SRCROOT}/D3D11/D3D11TextureImpl.cpp
+        ${SRCROOT}/D3D11/D3D11TextureImpl.hpp
+        ${SRCROOT}/D3D11/D3D11Utils.hpp
+        ${SRCROOT}/D3D11/D3D11VertexBufferImpl.cpp
+        ${SRCROOT}/D3D11/D3D11VertexBufferImpl.hpp
+    )
+    source_group("d3d11" FILES ${D3D11_SRC})
+endif()
+
 
 # define the sfml-graphics target
 sfml_add_library(Graphics
-                 SOURCES ${SRC} ${DRAWABLES_SRC} ${OPENGL_SRC}
+                 SOURCES ${SRC} ${DRAWABLES_SRC} ${OPENGL_SRC} ${D3D11_SRC}
                  DEPENDENCIES "Dependencies.cmake.in")
+
+# Direct3D 11 backend dependencies
+if(SFML_OS_WINDOWS AND SFML_ENABLE_D3D11)
+    target_compile_definitions(sfml-graphics PRIVATE "SFML_ENABLE_D3D11")
+    target_link_libraries(sfml-graphics PRIVATE d3d11 dxgi d3dcompiler)
+endif()
 
 # setup dependencies
 target_link_libraries(sfml-graphics PUBLIC SFML::Window)

@@ -49,6 +49,7 @@ class Image;
 
 namespace priv
 {
+class D3D11ShaderImpl;
 class GlTextureImpl;
 class GraphicsDevice;
 class RenderTargetImpl;
@@ -689,6 +690,7 @@ private:
     friend class Text;
     friend class RenderTexture;
     friend class RenderTarget;
+    friend class priv::D3D11ShaderImpl;
     friend class priv::GlTextureImpl;
     friend class priv::RenderTargetImpl;
 

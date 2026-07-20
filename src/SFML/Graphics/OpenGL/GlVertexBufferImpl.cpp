@@ -39,9 +39,6 @@
 
 namespace
 {
-// A nested named namespace is used here to allow unity builds of SFML.
-namespace GlVertexBufferImplImpl
-{
 GLenum usageToGlEnum(sf::VertexBuffer::Usage usage)
 {
     switch (usage)
@@ -54,7 +51,6 @@ GLenum usageToGlEnum(sf::VertexBuffer::Usage usage)
             return GLEXT_GL_STREAM_DRAW;
     }
 }
-} // namespace GlVertexBufferImplImpl
 } // namespace
 
 
@@ -90,7 +86,7 @@ bool GlVertexBufferImpl::create(std::size_t vertexCount, VertexBuffer::Usage usa
     glCheck(GLEXT_glBufferData(GLEXT_GL_ARRAY_BUFFER,
                                static_cast<GLsizeiptrARB>(sizeof(Vertex) * vertexCount),
                                nullptr,
-                               GlVertexBufferImplImpl::usageToGlEnum(usage)));
+                               usageToGlEnum(usage)));
     glCheck(GLEXT_glBindBuffer(GLEXT_GL_ARRAY_BUFFER, 0));
 
     return true;
@@ -114,7 +110,7 @@ bool GlVertexBufferImpl::update(const Vertex*       vertices,
         glCheck(GLEXT_glBufferData(GLEXT_GL_ARRAY_BUFFER,
                                    static_cast<GLsizeiptrARB>(sizeof(Vertex) * vertexCount),
                                    nullptr,
-                                   GlVertexBufferImplImpl::usageToGlEnum(usage)));
+                                   usageToGlEnum(usage)));
 
         size = vertexCount;
     }
@@ -169,7 +165,7 @@ bool GlVertexBufferImpl::update([[maybe_unused]] const VertexBufferImpl& other,
     glCheck(GLEXT_glBufferData(GLEXT_GL_ARRAY_BUFFER,
                                static_cast<GLsizeiptrARB>(sizeof(Vertex) * otherSize),
                                nullptr,
-                               GlVertexBufferImplImpl::usageToGlEnum(usage)));
+                               usageToGlEnum(usage)));
 
     void* const destination = glCheck(GLEXT_glMapBuffer(GLEXT_GL_ARRAY_BUFFER, GLEXT_GL_WRITE_ONLY));
 

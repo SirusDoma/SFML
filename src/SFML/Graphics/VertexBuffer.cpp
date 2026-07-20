@@ -26,7 +26,6 @@
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Graphics/GraphicsDevice.hpp>
-#include <SFML/Graphics/OpenGL/GlVertexBufferImpl.hpp>
 #include <SFML/Graphics/RenderTarget.hpp>
 #include <SFML/Graphics/VertexBuffer.hpp>
 #include <SFML/Graphics/VertexBufferImpl.hpp>
@@ -219,7 +218,7 @@ VertexBuffer::Usage VertexBuffer::getUsage() const
 ////////////////////////////////////////////////////////////
 bool VertexBuffer::isAvailable()
 {
-    return priv::GlVertexBufferImpl::isAvailable();
+    return priv::ensureGraphicsDevice()->isVertexBufferAvailable();
 }
 
 

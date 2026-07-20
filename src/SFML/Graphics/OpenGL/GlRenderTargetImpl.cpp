@@ -49,11 +49,8 @@
 
 namespace
 {
-// A nested named namespace is used here to allow unity builds of SFML.
-namespace GlRenderTargetImplImpl
-{
 // Mutex to protect our context-RenderTarget-map
-std::recursive_mutex& getMutex()
+std::recursive_mutex& getContextRenderTargetMapMutex()
 {
     static std::recursive_mutex mutex;
     return mutex;
@@ -69,7 +66,7 @@ ContextRenderTargetMap& getContextRenderTargetMap()
 }
 
 // Check if a RenderTarget with the given ID is active in the current context
-bool isActive(std::uint64_t id)
+bool isActiveInCurrentContext(std::uint64_t id)
 {
     const auto it = getContextRenderTargetMap().find(sf::Context::getActiveContextId());
     return (it != getContextRenderTargetMap().end()) && (it->second == id);
@@ -181,7 +178,6 @@ std::uint32_t stencilFunctionToGlConstant(sf::StencilComparison comparison)
     assert(false);
     return GL_ALWAYS;
 }
-} // namespace GlRenderTargetImplImpl
 } // namespace
 
 
@@ -190,7 +186,7 @@ namespace sf::priv
 ////////////////////////////////////////////////////////////
 bool GlRenderTargetImpl::isActive(std::uint64_t id) const
 {
-    return GlRenderTargetImplImpl::isActive(id);
+    return isActiveInCurrentContext(id);
 }
 
 
@@ -198,13 +194,13 @@ bool GlRenderTargetImpl::isActive(std::uint64_t id) const
 void GlRenderTargetImpl::activate(RenderTarget& target, std::uint64_t id, bool active)
 {
     // Mark this RenderTarget as active or no longer active in the tracking map
-    const std::lock_guard lock(GlRenderTargetImplImpl::getMutex());
+    const std::lock_guard lock(getContextRenderTargetMapMutex());
 
     const std::uint64_t contextId = Context::getActiveContextId();
 
     auto& cache = getCache(target);
 
-    auto&      contextRenderTargetMap = GlRenderTargetImplImpl::getContextRenderTargetMap();
+    auto&      contextRenderTargetMap = getContextRenderTargetMap();
     const auto it                     = contextRenderTargetMap.find(contextId);
 
     if (active)
@@ -432,7 +428,7 @@ void GlRenderTargetImpl::resetStates(RenderTarget& target, std::uint64_t id)
     }
 #endif
 
-    if (GlRenderTargetImplImpl::isActive(id) || target.setActive(true))
+    if (isActive(id) || target.setActive(true))
     {
         auto& cache = getCache(target);
 
@@ -534,9 +530,6 @@ void GlRenderTargetImpl::applyCurrentView(RenderTarget& target)
 ////////////////////////////////////////////////////////////
 void GlRenderTargetImpl::applyBlendMode(RenderTarget& target, const BlendMode& mode)
 {
-    using GlRenderTargetImplImpl::equationToGlConstant;
-    using GlRenderTargetImplImpl::factorToGlConstant;
-
     // Apply the blend mode, falling back to the non-separate versions if necessary
     if (GLEXT_blend_func_separate)
     {
@@ -587,9 +580,6 @@ void GlRenderTargetImpl::applyBlendMode(RenderTarget& target, const BlendMode& m
 ////////////////////////////////////////////////////////////
 void GlRenderTargetImpl::applyStencilMode(RenderTarget& target, const StencilMode& mode)
 {
-    using GlRenderTargetImplImpl::stencilFunctionToGlConstant;
-    using GlRenderTargetImplImpl::stencilOperationToGlConstant;
-
     auto& cache = getCache(target);
 
     // Fast path if we have a default (disabled) stencil mode

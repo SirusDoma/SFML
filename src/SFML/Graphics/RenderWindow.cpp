@@ -25,22 +25,33 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
+#include <SFML/Graphics/GraphicsBackend.hpp>
+#include <SFML/Graphics/GraphicsDevice.hpp>
 #include <SFML/Graphics/Image.hpp>
 #include <SFML/Graphics/OpenGL/GLCheck.hpp>
 #include <SFML/Graphics/OpenGL/GLExtensions.hpp>
 #include <SFML/Graphics/OpenGL/RenderTextureImplFBO.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
+#include <SFML/Graphics/RenderWindowImpl.hpp>
 
 #include <SFML/Window/VideoMode.hpp>
+
+#include <SFML/System/Err.hpp>
+
+#include <ostream>
 
 
 namespace sf
 {
 ////////////////////////////////////////////////////////////
+RenderWindow::RenderWindow() = default;
+
+
+////////////////////////////////////////////////////////////
 RenderWindow::RenderWindow(VideoMode mode, const String& title, std::uint32_t style, State state, const ContextSettings& settings)
 {
     // Don't call the base class constructor because it contains virtual function calls
-    Window::create(mode, title, style, state, settings);
+    create(mode, title, style, state, settings);
 }
 
 
@@ -48,7 +59,7 @@ RenderWindow::RenderWindow(VideoMode mode, const String& title, std::uint32_t st
 RenderWindow::RenderWindow(VideoMode mode, const String& title, State state, const ContextSettings& settings)
 {
     // Don't call the base class constructor because it contains virtual function calls
-    Window::create(mode, title, sf::Style::Default, state, settings);
+    create(mode, title, sf::Style::Default, state, settings);
 }
 
 
@@ -56,7 +67,100 @@ RenderWindow::RenderWindow(VideoMode mode, const String& title, State state, con
 RenderWindow::RenderWindow(WindowHandle handle, const ContextSettings& settings)
 {
     // Don't call the base class constructor because it contains virtual function calls
-    Window::create(handle, settings);
+    create(handle, settings);
+}
+
+
+////////////////////////////////////////////////////////////
+RenderWindow::~RenderWindow() = default;
+
+
+////////////////////////////////////////////////////////////
+RenderWindow::RenderWindow(RenderWindow&&) noexcept = default;
+
+
+////////////////////////////////////////////////////////////
+RenderWindow& RenderWindow::operator=(RenderWindow&&) noexcept = default;
+
+
+////////////////////////////////////////////////////////////
+void RenderWindow::create(VideoMode mode, const String& title, std::uint32_t style, State state, const ContextSettings& settings)
+{
+    // The RenderTarget constructor already locked the backend in
+    if (getGraphicsBackend() == GraphicsBackend::OpenGL)
+    {
+        Window::create(mode, title, style, state, settings);
+        return;
+    }
+
+    // Create the window without an OpenGL context, the surface is created in onCreate()
+    m_surface.reset();
+    m_requestedSettings     = settings;
+    m_requestedBitsPerPixel = mode.bitsPerPixel;
+    WindowBase::create(mode, title, style, state);
+}
+
+
+////////////////////////////////////////////////////////////
+void RenderWindow::create(VideoMode mode, const String& title, State state, const ContextSettings& settings)
+{
+    create(mode, title, sf::Style::Default, state, settings);
+}
+
+
+////////////////////////////////////////////////////////////
+void RenderWindow::create(WindowHandle handle, const ContextSettings& settings)
+{
+    if (getGraphicsBackend() == GraphicsBackend::OpenGL)
+    {
+        Window::create(handle, settings);
+        return;
+    }
+
+    m_surface.reset();
+    m_requestedSettings     = settings;
+    m_requestedBitsPerPixel = VideoMode::getDesktopMode().bitsPerPixel;
+    WindowBase::create(handle);
+}
+
+
+////////////////////////////////////////////////////////////
+void RenderWindow::close()
+{
+    m_surface.reset();
+
+    Window::close();
+}
+
+
+////////////////////////////////////////////////////////////
+void RenderWindow::display()
+{
+    if (m_surface)
+        m_surface->present();
+
+    // Swaps the buffers of the OpenGL context and applies the framerate limit
+    Window::display();
+}
+
+
+////////////////////////////////////////////////////////////
+void RenderWindow::setVerticalSyncEnabled(bool enabled)
+{
+    if (m_surface)
+        m_surface->setVerticalSyncEnabled(enabled);
+    else
+        Window::setVerticalSyncEnabled(enabled);
+}
+
+
+////////////////////////////////////////////////////////////
+const ContextSettings& RenderWindow::getSettings() const
+{
+    if (m_surface)
+        return m_surface->getSettings();
+
+    return Window::getSettings();
 }
 
 
@@ -77,6 +181,9 @@ void RenderWindow::setIcon(const Image& icon)
 ////////////////////////////////////////////////////////////
 bool RenderWindow::isSrgb() const
 {
+    if (m_surface)
+        return m_surface->isSrgb();
+
     return getSettings().sRgbCapable;
 }
 
@@ -84,6 +191,17 @@ bool RenderWindow::isSrgb() const
 ////////////////////////////////////////////////////////////
 bool RenderWindow::setActive(bool active)
 {
+    if (m_surface)
+    {
+        bool result = m_surface->activate(active);
+
+        // Update RenderTarget tracking
+        if (result)
+            result = RenderTarget::setActive(active);
+
+        return result;
+    }
+
     bool result = Window::setActive(active);
 
     // Update RenderTarget tracking
@@ -106,21 +224,36 @@ bool RenderWindow::setActive(bool active)
 ////////////////////////////////////////////////////////////
 void RenderWindow::onCreate()
 {
-    if (priv::RenderTextureImplFBO::isAvailable())
+    if (getGraphicsBackend() == GraphicsBackend::OpenGL)
     {
-        // Retrieve the framebuffer ID we have to bind when targeting the window for rendering
-        // We assume that this window's context is still active at this point
-        glCheck(glGetIntegerv(GLEXT_GL_FRAMEBUFFER_BINDING, reinterpret_cast<GLint*>(&m_defaultFrameBuffer)));
+        if (priv::RenderTextureImplFBO::isAvailable())
+        {
+            // Retrieve the framebuffer ID we have to bind when targeting the window for rendering
+            // We assume that this window's context is still active at this point
+            glCheck(glGetIntegerv(GLEXT_GL_FRAMEBUFFER_BINDING, reinterpret_cast<GLint*>(&m_defaultFrameBuffer)));
+        }
+    }
+    else
+    {
+        // Create the presentation surface on the native window
+        m_surface = priv::ensureGraphicsDevice()
+                        ->createRenderWindowImpl(getNativeHandle(), m_requestedSettings, m_requestedBitsPerPixel);
     }
 
     // Just initialize the render target part
     RenderTarget::initialize();
+
+    if (m_surface && !setActive(true))
+        err() << "Failed to activate render window" << std::endl;
 }
 
 
 ////////////////////////////////////////////////////////////
 void RenderWindow::onResize()
 {
+    if (m_surface)
+        m_surface->resize(getSize());
+
     // Update the current view (recompute the viewport, which is stored in relative coordinates)
     setView(getView());
 }

@@ -59,9 +59,6 @@
 
 namespace
 {
-// A nested named namespace is used here to allow unity builds of SFML.
-namespace GlShaderImplImpl
-{
 // Retrieve the maximum number of texture units available
 std::size_t getMaxTextureUnits()
 {
@@ -123,7 +120,6 @@ std::vector<float> flatten(const sf::Glsl::Vec4* vectorArray, std::size_t length
 
     return contiguous;
 }
-} // namespace GlShaderImplImpl
 } // namespace
 
 
@@ -433,7 +429,7 @@ void GlShaderImpl::setUniform(const std::string& name, const Texture& texture)
         if (it == m_textures.end())
         {
             // New entry, make sure there are enough texture units
-            if (m_textures.size() + 1 >= GlShaderImplImpl::getMaxTextureUnits())
+            if (m_textures.size() + 1 >= getMaxTextureUnits())
             {
                 err() << "Impossible to use texture " << std::quoted(name)
                       << " for shader: all available texture units are used" << std::endl;
@@ -476,7 +472,7 @@ void GlShaderImpl::setUniformArray(const std::string& name, const float* scalarA
 ////////////////////////////////////////////////////////////
 void GlShaderImpl::setUniformArray(const std::string& name, const Glsl::Vec2* vectorArray, std::size_t length)
 {
-    std::vector<float> contiguous = GlShaderImplImpl::flatten(vectorArray, length);
+    std::vector<float> contiguous = flatten(vectorArray, length);
 
     const UniformBinder binder(*this, name);
     if (binder.location != -1)
@@ -487,7 +483,7 @@ void GlShaderImpl::setUniformArray(const std::string& name, const Glsl::Vec2* ve
 ////////////////////////////////////////////////////////////
 void GlShaderImpl::setUniformArray(const std::string& name, const Glsl::Vec3* vectorArray, std::size_t length)
 {
-    std::vector<float> contiguous = GlShaderImplImpl::flatten(vectorArray, length);
+    std::vector<float> contiguous = flatten(vectorArray, length);
 
     const UniformBinder binder(*this, name);
     if (binder.location != -1)
@@ -498,7 +494,7 @@ void GlShaderImpl::setUniformArray(const std::string& name, const Glsl::Vec3* ve
 ////////////////////////////////////////////////////////////
 void GlShaderImpl::setUniformArray(const std::string& name, const Glsl::Vec4* vectorArray, std::size_t length)
 {
-    std::vector<float> contiguous = GlShaderImplImpl::flatten(vectorArray, length);
+    std::vector<float> contiguous = flatten(vectorArray, length);
 
     const UniformBinder binder(*this, name);
     if (binder.location != -1)

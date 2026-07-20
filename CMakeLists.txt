@@ -131,6 +131,8 @@ if(SFML_OS_WINDOWS)
     sfml_set_option(SFML_USE_MESA3D OFF BOOL "ON to use the Mesa 3D graphics library for rendering, OFF to use the system provided library for rendering")
 
     include(cmake/Mesa3D.cmake)
+
+    sfml_set_option(SFML_ENABLE_D3D11 ON BOOL "ON to compile the Direct3D 11 graphics backend in addition to OpenGL")
 endif()
 
 # setup macOS stuff

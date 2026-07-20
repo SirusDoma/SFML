@@ -6,6 +6,7 @@
 #include <SFML/Audio.hpp>
 
 #include <filesystem>
+#include <iostream>
 #include <random>
 #include <string>
 
@@ -34,8 +35,12 @@ std::filesystem::path resourcesDir()
 /// \return Application exit code
 ///
 ////////////////////////////////////////////////////////////
-int main()
+int main(int argc, char* argv[])
 {
+    // Use the Direct3D 11 backend when it is available, pass "gl" to force OpenGL
+    if (!(argc > 1 && std::string(argv[1]) == "gl") && !sf::setGraphicsBackend(sf::GraphicsBackend::Direct3D11))
+        std::cerr << "Direct3D 11 is not available, running on OpenGL instead" << std::endl;
+
     std::random_device rd;
     std::mt19937       rng(rd());
 
@@ -47,7 +52,8 @@ int main()
 
     // Create the window of the application
     sf::RenderWindow window(sf::VideoMode({static_cast<unsigned int>(gameWidth), static_cast<unsigned int>(gameHeight)}, 32),
-                            "SFML Tennis",
+                            sf::getGraphicsBackend() == sf::GraphicsBackend::Direct3D11 ? "SFML Tennis (Direct3D 11)"
+                                                                                        : "SFML Tennis (OpenGL)",
                             sf::Style::Titlebar | sf::Style::Close);
     window.setVerticalSyncEnabled(true);
 

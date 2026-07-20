@@ -27,7 +27,6 @@
 ////////////////////////////////////////////////////////////
 #include <SFML/Graphics/GraphicsDevice.hpp>
 #include <SFML/Graphics/Image.hpp>
-#include <SFML/Graphics/OpenGL/GlTextureImpl.hpp>
 #include <SFML/Graphics/Texture.hpp>
 #include <SFML/Graphics/TextureImpl.hpp>
 
@@ -444,13 +443,14 @@ void Texture::update(const Window& window, Vector2u dest)
         return;
     }
 
-    if (!m_impl->update(window, dest, m_isSmooth))
+    bool pixelsFlipped = false;
+    if (!m_impl->update(window, dest, m_isSmooth, pixelsFlipped))
     {
         return;
     }
 
     m_hasMipmap     = false;
-    m_pixelsFlipped = true;
+    m_pixelsFlipped = pixelsFlipped;
     m_cacheId       = TextureImpl::getUniqueId();
 }
 
@@ -525,6 +525,10 @@ bool Texture::generateMipmap()
 
     m_hasMipmap = true;
 
+    // Invalidate the render target cache so backends that select their sampler
+    // at bind time pick up the mipmap
+    m_cacheId = TextureImpl::getUniqueId();
+
     return true;
 }
 
@@ -538,13 +542,14 @@ void Texture::invalidateMipmap()
     m_impl->invalidateMipmap(m_isSmooth);
 
     m_hasMipmap = false;
+    m_cacheId   = TextureImpl::getUniqueId();
 }
 
 
 ////////////////////////////////////////////////////////////
 unsigned int Texture::getMaximumSize()
 {
-    return priv::GlTextureImpl::getMaximumSize();
+    return priv::ensureGraphicsDevice()->getMaximumTextureSize();
 }
 
 

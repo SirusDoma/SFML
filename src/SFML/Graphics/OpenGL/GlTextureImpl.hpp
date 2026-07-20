@@ -116,14 +116,15 @@ public:
     ////////////////////////////////////////////////////////////
     /// \brief Update the texture from the contents of a window
     ///
-    /// \param window Window to copy to the texture
-    /// \param dest   Coordinates of the destination position
-    /// \param smooth Current smooth filter state
+    /// \param window        Window to copy to the texture
+    /// \param dest          Coordinates of the destination position
+    /// \param smooth        Current smooth filter state
+    /// \param pixelsFlipped Set to whether the copied pixels are flipped vertically
     ///
     /// \return `true` if the texture was updated
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] bool update(const Window& window, Vector2u dest, bool smooth) override;
+    [[nodiscard]] bool update(const Window& window, Vector2u dest, bool smooth, bool& pixelsFlipped) override;
 
     ////////////////////////////////////////////////////////////
     /// \brief Copy the texture pixels to an image

@@ -118,6 +118,38 @@ public:
     [[nodiscard]] unsigned int getMaximumAntiAliasingLevel() override;
 
     ////////////////////////////////////////////////////////////
+    /// \brief Get the maximum texture size supported by this backend
+    ///
+    /// \return Maximum size allowed for textures, in pixels
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] unsigned int getMaximumTextureSize() override;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Tell whether this backend supports shaders
+    ///
+    /// \return `true` if shaders are supported
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] bool isShaderAvailable() override;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Tell whether this backend supports geometry shaders
+    ///
+    /// \return `true` if geometry shaders are supported
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] bool isGeometryShaderAvailable() override;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Tell whether this backend supports vertex buffers
+    ///
+    /// \return `true` if vertex buffers are supported
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] bool isVertexBufferAvailable() override;
+
+    ////////////////////////////////////////////////////////////
     /// \brief Get the backend this device renders through
     ///
     /// \return The graphics backend

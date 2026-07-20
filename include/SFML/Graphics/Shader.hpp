@@ -48,6 +48,7 @@ namespace priv
 {
 class GlShaderImpl;
 class GraphicsDevice;
+class RenderTargetImpl;
 class ShaderImpl;
 } // namespace priv
 
@@ -828,6 +829,7 @@ public:
 
 private:
     friend class priv::GlShaderImpl;
+    friend class priv::RenderTargetImpl;
 
     ////////////////////////////////////////////////////////////
     /// \brief Compile the shader(s) and create the program

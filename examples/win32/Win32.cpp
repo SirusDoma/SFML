@@ -5,6 +5,7 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+#include <iostream>
 #include <windows.h>
 
 #include <cmath>
@@ -54,6 +55,10 @@ LRESULT CALLBACK onEvent(HWND handle, UINT message, WPARAM wParam, LPARAM lParam
 ////////////////////////////////////////////////////////////
 int main()
 {
+    // Use the Direct3D 11 backend when it is available
+    if (!sf::setGraphicsBackend(sf::GraphicsBackend::Direct3D11))
+        std::cerr << "Direct3D 11 is not available, running on OpenGL instead" << std::endl;
+
     HINSTANCE instance = GetModuleHandle(nullptr);
 
     // Define a class for our main window
@@ -71,17 +76,11 @@ int main()
     RegisterClass(&windowClass);
 
     // Create the main window
-    HWND window = CreateWindow(TEXT("SFML App"),
-                               TEXT("SFML Win32"),
-                               WS_SYSMENU | WS_VISIBLE,
-                               200,
-                               200,
-                               660,
-                               520,
-                               nullptr,
-                               nullptr,
-                               instance,
-                               nullptr);
+    const auto* title = sf::getGraphicsBackend() == sf::GraphicsBackend::Direct3D11
+                            ? TEXT("SFML Win32 (Direct3D 11)")
+                            : TEXT("SFML Win32 (OpenGL)");
+
+    HWND window = CreateWindow(TEXT("SFML App"), title, WS_SYSMENU | WS_VISIBLE, 200, 200, 660, 520, nullptr, nullptr, instance, nullptr);
 
     // Add a button for exiting
     button = CreateWindow(TEXT("BUTTON"), TEXT("Quit"), WS_CHILD | WS_VISIBLE, 560, 440, 80, 40, window, nullptr, instance, nullptr);

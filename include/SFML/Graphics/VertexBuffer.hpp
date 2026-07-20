@@ -46,6 +46,7 @@ struct Vertex;
 namespace priv
 {
 class GraphicsDevice;
+class RenderTargetImpl;
 class VertexBufferImpl;
 } // namespace priv
 
@@ -305,6 +306,8 @@ public:
     [[nodiscard]] static bool isAvailable();
 
 private:
+    friend class priv::RenderTargetImpl;
+
     ////////////////////////////////////////////////////////////
     /// \brief Draw the vertex buffer to a render target
     ///

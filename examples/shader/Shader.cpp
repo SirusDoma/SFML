@@ -21,6 +21,22 @@ std::mt19937       rng(rd());
 
 
 ////////////////////////////////////////////////////////////
+// Shading language helpers, the shader sources are provided
+// in the language the active backend consumes
+////////////////////////////////////////////////////////////
+bool useHlsl()
+{
+    return sf::getShadingLanguage() == sf::ShadingLanguage::Hlsl;
+}
+
+const char* currentTextureName()
+{
+    // "texture" is a reserved word in HLSL
+    return useHlsl() ? "tex" : "texture";
+}
+
+
+////////////////////////////////////////////////////////////
 // Base class for effects
 ////////////////////////////////////////////////////////////
 struct Effect : sf::Drawable
@@ -39,7 +55,7 @@ public:
         m_texture(std::move(texture)),
         m_shader(std::move(shader))
     {
-        m_shader.setUniform("texture", sf::Shader::CurrentTexture);
+        m_shader.setUniform(currentTextureName(), sf::Shader::CurrentTexture);
     }
 
     void update(float /* time */, float x, float y) override
@@ -283,7 +299,7 @@ std::optional<Pixelate> tryLoadPixelate()
         return std::nullopt;
 
     sf::Shader shader;
-    if (!shader.loadFromFile("resources/pixelate.frag", sf::Shader::Type::Fragment))
+    if (!shader.loadFromFile(useHlsl() ? "resources/pixelate.hlsl" : "resources/pixelate.frag", sf::Shader::Type::Fragment))
         return std::nullopt;
 
     return std::make_optional<Pixelate>(std::move(texture), std::move(shader));
@@ -292,7 +308,8 @@ std::optional<Pixelate> tryLoadPixelate()
 std::optional<WaveBlur> tryLoadWaveBlur(const sf::Font& font)
 {
     sf::Shader shader;
-    if (!shader.loadFromFile("resources/wave.vert", "resources/blur.frag"))
+    if (useHlsl() ? !shader.loadFromFile("resources/wave.hlsl", "resources/blur.hlsl")
+                  : !shader.loadFromFile("resources/wave.vert", "resources/blur.frag"))
         return std::nullopt;
 
     return std::make_optional<WaveBlur>(font, std::move(shader));
@@ -301,7 +318,8 @@ std::optional<WaveBlur> tryLoadWaveBlur(const sf::Font& font)
 std::optional<StormBlink> tryLoadStormBlink()
 {
     sf::Shader shader;
-    if (!shader.loadFromFile("resources/storm.vert", "resources/blink.frag"))
+    if (useHlsl() ? !shader.loadFromFile("resources/storm.hlsl", "resources/blink.hlsl")
+                  : !shader.loadFromFile("resources/storm.vert", "resources/blink.frag"))
         return std::nullopt;
 
     return std::make_optional<StormBlink>(std::move(shader));
@@ -332,10 +350,10 @@ std::optional<Edge> tryLoadEdge()
 
     // Load the shader
     sf::Shader shader;
-    if (!shader.loadFromFile("resources/edge.frag", sf::Shader::Type::Fragment))
+    if (!shader.loadFromFile(useHlsl() ? "resources/edge.hlsl" : "resources/edge.frag", sf::Shader::Type::Fragment))
         return std::nullopt;
 
-    shader.setUniform("texture", sf::Shader::CurrentTexture);
+    shader.setUniform(currentTextureName(), sf::Shader::CurrentTexture);
 
     return std::make_optional<Edge>(std::move(surface), std::move(backgroundTexture), std::move(entityTexture), std::move(shader));
 }
@@ -355,10 +373,14 @@ std::optional<Geometry> tryLoadGeometry()
 
     // Load the shader
     sf::Shader shader;
-    if (!shader.loadFromFile("resources/billboard.vert", "resources/billboard.geom", "resources/billboard.frag"))
+    if (useHlsl()
+            ? !shader.loadFromFile("resources/billboard-vs.hlsl",
+                                   "resources/billboard-gs.hlsl",
+                                   "resources/billboard-ps.hlsl")
+            : !shader.loadFromFile("resources/billboard.vert", "resources/billboard.geom", "resources/billboard.frag"))
         return std::nullopt;
 
-    shader.setUniform("texture", sf::Shader::CurrentTexture);
+    shader.setUniform(currentTextureName(), sf::Shader::CurrentTexture);
 
     // Set the render resolution (used for proper scaling)
     shader.setUniform("resolution", sf::Vector2f(800, 600));
@@ -375,8 +397,12 @@ std::optional<Geometry> tryLoadGeometry()
 /// \return Application exit code
 ///
 ////////////////////////////////////////////////////////////
-int main()
+int main(int argc, char* argv[])
 {
+    // Use the Direct3D 11 backend when it is available, pass "gl" to force OpenGL
+    if (!(argc > 1 && std::string(argv[1]) == "gl") && !sf::setGraphicsBackend(sf::GraphicsBackend::Direct3D11))
+        std::cerr << "Direct3D 11 is not available, running on OpenGL instead" << std::endl;
+
     // Exit early if shaders are not available
     if (!sf::Shader::isAvailable())
     {
@@ -385,7 +411,9 @@ int main()
     }
 
     // Create the main window
-    sf::RenderWindow window(sf::VideoMode({800, 600}), "SFML Shader", sf::Style::Titlebar | sf::Style::Close);
+    sf::RenderWindow window(sf::VideoMode({800, 600}),
+                            useHlsl() ? "SFML Shader (Direct3D 11)" : "SFML Shader (OpenGL)",
+                            sf::Style::Titlebar | sf::Style::Close);
     window.setVerticalSyncEnabled(true);
 
     // Open the application font

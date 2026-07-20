@@ -32,6 +32,7 @@
 #include <SFML/Graphics/CircleShape.hpp>
 #include <SFML/Graphics/Color.hpp>
 #include <SFML/Graphics/ConvexShape.hpp>
+#include <SFML/Graphics/D3D11Interop.hpp>
 #include <SFML/Graphics/Drawable.hpp>
 #include <SFML/Graphics/Font.hpp>
 #include <SFML/Graphics/Glyph.hpp>

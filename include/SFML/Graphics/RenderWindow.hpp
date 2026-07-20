@@ -39,6 +39,8 @@
 
 #include <SFML/System/Vector2.hpp>
 
+#include <memory>
+
 #include <cstdint>
 
 
@@ -46,6 +48,11 @@ namespace sf
 {
 class Image;
 class String;
+
+namespace priv
+{
+class RenderWindowImpl;
+} // namespace priv
 
 ////////////////////////////////////////////////////////////
 /// \brief Window that can serve as a target for 2D drawing
@@ -61,7 +68,7 @@ public:
     /// use the other constructors or call `create()` to do so.
     ///
     ////////////////////////////////////////////////////////////
-    RenderWindow() = default;
+    RenderWindow();
 
     ////////////////////////////////////////////////////////////
     /// \brief Construct a new window
@@ -125,6 +132,133 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     explicit RenderWindow(WindowHandle handle, const ContextSettings& settings = {});
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Destructor
+    ///
+    ////////////////////////////////////////////////////////////
+    ~RenderWindow() override;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Move constructor
+    ///
+    ////////////////////////////////////////////////////////////
+    RenderWindow(RenderWindow&&) noexcept;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Move assignment
+    ///
+    ////////////////////////////////////////////////////////////
+    RenderWindow& operator=(RenderWindow&&) noexcept;
+
+    ////////////////////////////////////////////////////////////
+    // Bring the create overloads of the base classes back into scope
+    using Window::create;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Create (or recreate) the window
+    ///
+    /// If the window was already created, it closes it first.
+    /// If `state` is `State::Fullscreen`, then `mode` must be
+    /// a valid video mode.
+    ///
+    /// The last parameter is a structure specifying advanced OpenGL
+    /// context settings such as anti-aliasing, depth-buffer bits, etc.
+    ///
+    /// \param mode     Video mode to use (defines the width, height and depth of the rendering area of the window)
+    /// \param title    Title of the window
+    /// \param style    %Window style, a bitwise OR combination of `sf::Style` enumerators
+    /// \param state    %Window state
+    /// \param settings Additional settings for the underlying OpenGL context
+    ///
+    ////////////////////////////////////////////////////////////
+    void create(VideoMode mode, const String& title, std::uint32_t style, State state, const ContextSettings& settings) override;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Create (or recreate) the window
+    ///
+    /// If the window was already created, it closes it first.
+    /// If `state` is `State::Fullscreen`, then `mode` must be
+    /// a valid video mode.
+    ///
+    /// The last parameter is a structure specifying advanced OpenGL
+    /// context settings such as anti-aliasing, depth-buffer bits, etc.
+    ///
+    /// \param mode     Video mode to use (defines the width, height and depth of the rendering area of the window)
+    /// \param title    Title of the window
+    /// \param state    %Window state
+    /// \param settings Additional settings for the underlying OpenGL context
+    ///
+    ////////////////////////////////////////////////////////////
+    void create(VideoMode mode, const String& title, State state, const ContextSettings& settings) override;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Create (or recreate) the window from an existing control
+    ///
+    /// Use this function if you want to create an SFML
+    /// rendering area into an already existing control.
+    /// If the window was already created, it closes it first.
+    ///
+    /// The second parameter is a structure specifying advanced
+    /// OpenGL context settings such as anti-aliasing,
+    /// depth-buffer bits, etc.
+    ///
+    /// \param handle   Platform-specific handle of the control
+    /// \param settings Additional settings for the underlying OpenGL context
+    ///
+    ////////////////////////////////////////////////////////////
+    void create(WindowHandle handle, const ContextSettings& settings) override;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Close the window and destroy all the attached resources
+    ///
+    /// After calling this function, the `sf::RenderWindow` instance
+    /// remains valid and you can call `create()` to recreate the window.
+    /// All other functions such as `pollEvent()` or `display()` will
+    /// still work (i.e. you don't have to test `isOpen()` every time),
+    /// and will have no effect on closed windows.
+    ///
+    ////////////////////////////////////////////////////////////
+    void close() override;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Display on screen what has been rendered to the window so far
+    ///
+    /// This function presents the rendered frame on screen and
+    /// applies the framerate limit, if one is set. It is typically
+    /// called after all drawing has been done for the current
+    /// frame, in order to show it on screen.
+    ///
+    ////////////////////////////////////////////////////////////
+    void display() override;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Enable or disable vertical synchronization
+    ///
+    /// Activating vertical synchronization will limit the number
+    /// of frames displayed to the refresh rate of the monitor.
+    /// This can avoid some visual artifacts, and limit the framerate
+    /// to a good value (but not constant across different computers).
+    ///
+    /// Vertical synchronization is disabled by default.
+    ///
+    /// \param enabled `true` to enable v-sync, `false` to deactivate it
+    ///
+    ////////////////////////////////////////////////////////////
+    void setVerticalSyncEnabled(bool enabled) override;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Get the settings of the rendering context of the window
+    ///
+    /// Note that these settings may be different from what was
+    /// passed to the constructor or the `create()` function,
+    /// if one or more settings were not supported. In this case,
+    /// SFML chose the closest match.
+    ///
+    /// \return Structure containing the context settings
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] const ContextSettings& getSettings() const override;
 
     ////////////////////////////////////////////////////////////
     /// \brief Get the size of the rendering region of the window
@@ -202,7 +336,11 @@ private:
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    unsigned int m_defaultFrameBuffer{}; //!< Framebuffer to bind when targeting this window
+    std::unique_ptr<priv::RenderWindowImpl> m_surface; //!< Presentation surface for non-OpenGL backends
+
+    ContextSettings m_requestedSettings;       //!< Settings requested at creation, consumed by the surface
+    unsigned int    m_requestedBitsPerPixel{}; //!< Pixel depth requested at creation
+    unsigned int    m_defaultFrameBuffer{};    //!< Framebuffer to bind when targeting this window
 };
 
 } // namespace sf
