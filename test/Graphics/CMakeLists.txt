@@ -9,6 +9,7 @@ set(GRAPHICS_SRC
     Font.test.cpp
     Glsl.test.cpp
     Glyph.test.cpp
+    GraphicsBackend.test.cpp
     Image.test.cpp
     Rect.test.cpp
     RectangleShape.test.cpp

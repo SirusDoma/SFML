@@ -276,7 +276,7 @@ public:
     /// \return Structure containing the OpenGL context settings
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] const ContextSettings& getSettings() const;
+    [[nodiscard]] virtual const ContextSettings& getSettings() const;
 
     ////////////////////////////////////////////////////////////
     /// \brief Enable or disable vertical synchronization
@@ -291,7 +291,7 @@ public:
     /// \param enabled `true` to enable v-sync, `false` to deactivate it
     ///
     ////////////////////////////////////////////////////////////
-    void setVerticalSyncEnabled(bool enabled);
+    virtual void setVerticalSyncEnabled(bool enabled);
 
     ////////////////////////////////////////////////////////////
     /// \brief Limit the framerate to a maximum fixed frequency
@@ -336,7 +336,7 @@ public:
     /// it on screen.
     ///
     ////////////////////////////////////////////////////////////
-    void display();
+    virtual void display();
 
 private:
     ////////////////////////////////////////////////////////////

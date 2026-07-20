@@ -15,12 +15,13 @@ set(SRC
     ${INCROOT}/Glsl.hpp
     ${INCROOT}/Glsl.inl
     ${INCROOT}/Glyph.hpp
-    ${SRCROOT}/GLCheck.cpp
-    ${SRCROOT}/GLCheck.hpp
-    ${SRCROOT}/GLExtensions.hpp
-    ${SRCROOT}/GLExtensions.cpp
+    ${INCROOT}/GraphicsBackend.hpp
+    ${SRCROOT}/GraphicsDevice.cpp
+    ${SRCROOT}/GraphicsDevice.hpp
     ${SRCROOT}/Image.cpp
     ${INCROOT}/Image.hpp
+    ${INCROOT}/OpenGLInterop.hpp
+    ${SRCROOT}/OpenGLInterop.cpp
     ${INCROOT}/PrimitiveType.hpp
     ${INCROOT}/Rect.hpp
     ${INCROOT}/Rect.inl
@@ -28,18 +29,21 @@ set(SRC
     ${INCROOT}/RenderStates.hpp
     ${SRCROOT}/RenderTexture.cpp
     ${INCROOT}/RenderTexture.hpp
+    ${SRCROOT}/RenderTextureImpl.hpp
     ${SRCROOT}/RenderTarget.cpp
     ${INCROOT}/RenderTarget.hpp
+    ${SRCROOT}/RenderTargetImpl.hpp
     ${SRCROOT}/RenderWindow.cpp
     ${INCROOT}/RenderWindow.hpp
+    ${SRCROOT}/RenderWindowImpl.hpp
     ${SRCROOT}/Shader.cpp
     ${INCROOT}/Shader.hpp
+    ${SRCROOT}/ShaderImpl.hpp
     ${SRCROOT}/StencilMode.cpp
     ${INCROOT}/StencilMode.hpp
     ${SRCROOT}/Texture.cpp
     ${INCROOT}/Texture.hpp
-    ${SRCROOT}/TextureSaver.cpp
-    ${SRCROOT}/TextureSaver.hpp
+    ${SRCROOT}/TextureImpl.hpp
     ${SRCROOT}/Transform.cpp
     ${INCROOT}/Transform.hpp
     ${INCROOT}/Transform.inl
@@ -70,23 +74,39 @@ set(DRAWABLES_SRC
     ${INCROOT}/VertexArray.hpp
     ${SRCROOT}/VertexBuffer.cpp
     ${INCROOT}/VertexBuffer.hpp
+    ${SRCROOT}/VertexBufferImpl.hpp
 )
 source_group("drawables" FILES ${DRAWABLES_SRC})
 
-# render-texture sources
-set(RENDER_TEXTURE_SRC
-    ${SRCROOT}/RenderTextureImpl.hpp
-    ${SRCROOT}/RenderTextureImplFBO.cpp
-    ${SRCROOT}/RenderTextureImplFBO.hpp
-    ${SRCROOT}/RenderTextureImplDefault.cpp
-    ${SRCROOT}/RenderTextureImplDefault.hpp
+# OpenGL backend sources
+set(OPENGL_SRC
+    ${SRCROOT}/OpenGL/GlGraphicsDevice.cpp
+    ${SRCROOT}/OpenGL/GlGraphicsDevice.hpp
+    ${SRCROOT}/OpenGL/GlRenderTargetImpl.cpp
+    ${SRCROOT}/OpenGL/GlRenderTargetImpl.hpp
+    ${SRCROOT}/OpenGL/GlShaderImpl.cpp
+    ${SRCROOT}/OpenGL/GlShaderImpl.hpp
+    ${SRCROOT}/OpenGL/GlTextureImpl.cpp
+    ${SRCROOT}/OpenGL/GlTextureImpl.hpp
+    ${SRCROOT}/OpenGL/GlVertexBufferImpl.cpp
+    ${SRCROOT}/OpenGL/GlVertexBufferImpl.hpp
+    ${SRCROOT}/OpenGL/GLCheck.cpp
+    ${SRCROOT}/OpenGL/GLCheck.hpp
+    ${SRCROOT}/OpenGL/GLExtensions.cpp
+    ${SRCROOT}/OpenGL/GLExtensions.hpp
+    ${SRCROOT}/OpenGL/RenderTextureImplDefault.cpp
+    ${SRCROOT}/OpenGL/RenderTextureImplDefault.hpp
+    ${SRCROOT}/OpenGL/RenderTextureImplFBO.cpp
+    ${SRCROOT}/OpenGL/RenderTextureImplFBO.hpp
+    ${SRCROOT}/OpenGL/TextureSaver.cpp
+    ${SRCROOT}/OpenGL/TextureSaver.hpp
 )
-source_group("render texture" FILES ${RENDER_TEXTURE_SRC})
+source_group("opengl" FILES ${OPENGL_SRC})
 
 
 # define the sfml-graphics target
 sfml_add_library(Graphics
-                 SOURCES ${SRC} ${DRAWABLES_SRC} ${RENDER_TEXTURE_SRC}
+                 SOURCES ${SRC} ${DRAWABLES_SRC} ${OPENGL_SRC}
                  DEPENDENCIES "Dependencies.cmake.in")
 
 # setup dependencies

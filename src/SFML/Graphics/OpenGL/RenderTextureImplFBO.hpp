@@ -93,13 +93,13 @@ private:
     /// \brief Create the render texture implementation
     ///
     /// \param size       Width and height of the texture to render to
-    /// \param textureId  OpenGL identifier of the target texture
+    /// \param texture    Target texture implementation
     /// \param settings   Context settings to create render-texture with
     ///
     /// \return `true` if creation has been successful
     ///
     ////////////////////////////////////////////////////////////
-    bool create(Vector2u size, unsigned int textureId, const ContextSettings& settings) override;
+    bool create(Vector2u size, TextureImpl& texture, const ContextSettings& settings) override;
 
     ////////////////////////////////////////////////////////////
     /// \brief Create an FBO in the current context
@@ -133,10 +133,34 @@ private:
     ////////////////////////////////////////////////////////////
     /// \brief Update the pixels of the target texture
     ///
-    /// \param textureId OpenGL identifier of the target texture
+    /// \param texture Target texture implementation
     ///
     ////////////////////////////////////////////////////////////
-    void updateTexture(unsigned textureId) override;
+    void updateTexture(TextureImpl& texture) override;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Tell whether the rendered pixels end up flipped vertically in the target texture
+    ///
+    /// \return `true` if the target texture's pixels are flipped
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] bool arePixelsFlipped() const override;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Tell whether displaying requires a full activation of the render texture
+    ///
+    /// \return `true` if display() must fully activate the render texture
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] bool needsFullActivationForDisplay() const override;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Tell whether the target texture is attached to the render surface
+    ///
+    /// \return `true` if the target texture is rendered to directly (e.g. a framebuffer attachment)
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] bool isTextureAttachment() const override;
 
     ////////////////////////////////////////////////////////////
     // Member data

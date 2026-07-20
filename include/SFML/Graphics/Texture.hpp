@@ -32,11 +32,10 @@
 #include <SFML/Graphics/CoordinateType.hpp>
 #include <SFML/Graphics/Rect.hpp>
 
-#include <SFML/Window/GlResource.hpp>
-
 #include <SFML/System/Vector2.hpp>
 
 #include <filesystem>
+#include <memory>
 
 #include <cstddef>
 #include <cstdint>
@@ -48,11 +47,19 @@ class InputStream;
 class Window;
 class Image;
 
+namespace priv
+{
+class GlTextureImpl;
+class GraphicsDevice;
+class RenderTargetImpl;
+class TextureImpl;
+} // namespace priv
+
 ////////////////////////////////////////////////////////////
 /// \brief Image living on the graphics card that can be used for drawing
 ///
 ////////////////////////////////////////////////////////////
-class SFML_GRAPHICS_API Texture : GlResource
+class SFML_GRAPHICS_API Texture
 {
 public:
     ////////////////////////////////////////////////////////////
@@ -667,39 +674,6 @@ public:
     [[nodiscard]] unsigned int getNativeHandle() const;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Bind a texture for rendering
-    ///
-    /// This function is not part of the graphics API, it mustn't be
-    /// used when drawing SFML entities. It must be used only if you
-    /// mix `sf::Texture` with OpenGL code.
-    ///
-    /// \code
-    /// sf::Texture t1, t2;
-    /// ...
-    /// sf::Texture::bind(&t1);
-    /// // draw OpenGL stuff that use t1...
-    /// sf::Texture::bind(&t2);
-    /// // draw OpenGL stuff that use t2...
-    /// sf::Texture::bind(nullptr);
-    /// // draw OpenGL stuff that use no texture...
-    /// \endcode
-    ///
-    /// The `coordinateType` argument controls how texture
-    /// coordinates will be interpreted. If Normalized (the default), they
-    /// must be in range [0 .. 1], which is the default way of handling
-    /// texture coordinates with OpenGL. If Pixels, they must be given
-    /// in pixels (range [0 .. size]). This mode is used internally by
-    /// the graphics classes of SFML, it makes the definition of texture
-    /// coordinates more intuitive for the high-level API, users don't need
-    /// to compute normalized values.
-    ///
-    /// \param texture Pointer to the texture to bind, can be null to use no texture
-    /// \param coordinateType Type of texture coordinates to use
-    ///
-    ////////////////////////////////////////////////////////////
-    static void bind(const Texture* texture, CoordinateType coordinateType = CoordinateType::Normalized);
-
-    ////////////////////////////////////////////////////////////
     /// \brief Get the maximum texture size allowed
     ///
     /// This maximum size is defined by the graphics driver.
@@ -715,21 +689,8 @@ private:
     friend class Text;
     friend class RenderTexture;
     friend class RenderTarget;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Get a valid image size according to hardware support
-    ///
-    /// This function checks whether the graphics driver supports
-    /// non power of two sizes or not, and adjusts the size
-    /// accordingly.
-    /// The returned size is greater than or equal to the original size.
-    ///
-    /// \param size size to convert
-    ///
-    /// \return Valid nearest size (greater than or equal to specified size)
-    ///
-    ////////////////////////////////////////////////////////////
-    [[nodiscard]] static unsigned int getValidSize(unsigned int size);
+    friend class priv::GlTextureImpl;
+    friend class priv::RenderTargetImpl;
 
     ////////////////////////////////////////////////////////////
     /// \brief Invalidate the mipmap if one exists
@@ -743,9 +704,11 @@ private:
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
+    std::shared_ptr<priv::GraphicsDevice> m_device; //!< Graphics device, kept alive for the lifetime of the texture
+    std::unique_ptr<priv::TextureImpl>    m_impl;   //!< Backend texture implementation, null before creation
+
     Vector2u      m_size;            //!< Public texture size
     Vector2u      m_actualSize;      //!< Actual texture size (can be greater than public size because of padding)
-    unsigned int  m_texture{};       //!< Internal texture identifier
     bool          m_isSmooth{};      //!< Status of the smooth filter
     bool          m_sRgb{};          //!< Should the texture source be converted from sRGB?
     bool          m_isRepeated{};    //!< Is the texture in repeat mode?
@@ -864,9 +827,9 @@ SFML_GRAPHICS_API void swap(Texture& left, Texture& right) noexcept;
 /// `sf::Texture` can also be used directly as a raw texture for
 /// custom OpenGL geometry.
 /// \code
-/// sf::Texture::bind(&texture);
+/// sf::OpenGL::bindTexture(&texture);
 /// ... render OpenGL geometry ...
-/// sf::Texture::bind(nullptr);
+/// sf::OpenGL::bindTexture(nullptr);
 /// \endcode
 ///
 /// \see `sf::Sprite`, `sf::Image`, `sf::RenderTexture`

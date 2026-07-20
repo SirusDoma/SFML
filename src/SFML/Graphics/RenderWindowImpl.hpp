@@ -27,63 +27,88 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
+#include <SFML/Window/ContextSettings.hpp>
+
 #include <SFML/System/Vector2.hpp>
 
 
-namespace sf
+namespace sf::priv
 {
-
-struct ContextSettings;
-
-namespace priv
-{
-class TextureImpl;
-
 ////////////////////////////////////////////////////////////
-/// \brief Abstract base class for render-texture implementations
+/// \brief Abstract base class for render window presentation surfaces
+///
+/// Only used by backends that do not present through an OpenGL
+/// context (the OpenGL backend keeps presenting through the
+/// context owned by `sf::Window`).
 ///
 ////////////////////////////////////////////////////////////
-class RenderTextureImpl
+class RenderWindowImpl
 {
 public:
     ////////////////////////////////////////////////////////////
     /// \brief Default constructor
     ///
     ////////////////////////////////////////////////////////////
-    RenderTextureImpl() = default;
+    RenderWindowImpl() = default;
 
     ////////////////////////////////////////////////////////////
     /// \brief Destructor
     ///
     ////////////////////////////////////////////////////////////
-    virtual ~RenderTextureImpl() = default;
+    virtual ~RenderWindowImpl() = default;
 
     ////////////////////////////////////////////////////////////
     /// \brief Deleted copy constructor
     ///
     ////////////////////////////////////////////////////////////
-    RenderTextureImpl(const RenderTextureImpl&) = delete;
+    RenderWindowImpl(const RenderWindowImpl&) = delete;
 
     ////////////////////////////////////////////////////////////
     /// \brief Deleted copy assignment
     ///
     ////////////////////////////////////////////////////////////
-    RenderTextureImpl& operator=(const RenderTextureImpl&) = delete;
+    RenderWindowImpl& operator=(const RenderWindowImpl&) = delete;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Create the render texture implementation
-    ///
-    /// \param size     Width and height of the texture to render to
-    /// \param texture  Target texture implementation
-    /// \param settings Context settings to create render-texture with
-    ///
-    /// \return `true` if creation has been successful
+    /// \brief Present the rendered frame on screen
     ///
     ////////////////////////////////////////////////////////////
-    virtual bool create(Vector2u size, TextureImpl& texture, const ContextSettings& settings) = 0;
+    virtual void present() = 0;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Activate or deactivate the render texture for rendering
+    /// \brief Enable or disable vertical synchronization
+    ///
+    /// \param enabled `true` to enable v-sync, `false` to deactivate it
+    ///
+    ////////////////////////////////////////////////////////////
+    virtual void setVerticalSyncEnabled(bool enabled) = 0;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Resize the presentation surface
+    ///
+    /// \param size New size of the window, in pixels
+    ///
+    ////////////////////////////////////////////////////////////
+    virtual void resize(Vector2u size) = 0;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Get the settings of the presentation surface
+    ///
+    /// \return Settings actually used by the surface
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] virtual const ContextSettings& getSettings() const = 0;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Tell whether the surface uses sRGB encoding
+    ///
+    /// \return `true` if the surface uses sRGB encoding
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] virtual bool isSrgb() const = 0;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Activate or deactivate the surface as the current render target
     ///
     /// \param active `true` to activate, `false` to deactivate
     ///
@@ -91,55 +116,6 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     virtual bool activate(bool active) = 0;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Tell if the render-texture will use sRGB encoding when drawing on it
-    ///
-    /// You can request sRGB encoding for a render-texture
-    /// by having the sRgbCapable flag set for the context parameter of create() method
-    ///
-    /// \return `true` if the render-texture use sRGB encoding, `false` otherwise
-    ///
-    ////////////////////////////////////////////////////////////
-    [[nodiscard]] virtual bool isSrgb() const = 0;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Update the pixels of the target texture
-    ///
-    /// \param texture Target texture implementation
-    ///
-    ////////////////////////////////////////////////////////////
-    virtual void updateTexture(TextureImpl& texture) = 0;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Tell whether the rendered pixels end up flipped vertically in the target texture
-    ///
-    /// \return `true` if the target texture's pixels are flipped
-    ///
-    ////////////////////////////////////////////////////////////
-    [[nodiscard]] virtual bool arePixelsFlipped() const = 0;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Tell whether displaying requires a full activation of the render texture
-    ///
-    /// Implementations that render into a separate context need a
-    /// full activation before their pixels can be copied to the
-    /// target texture; others only need render-target tracking.
-    ///
-    /// \return `true` if display() must fully activate the render texture
-    ///
-    ////////////////////////////////////////////////////////////
-    [[nodiscard]] virtual bool needsFullActivationForDisplay() const = 0;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Tell whether the target texture is attached to the render surface
-    ///
-    /// \return `true` if the target texture is rendered to directly (e.g. a framebuffer attachment)
-    ///
-    ////////////////////////////////////////////////////////////
-    [[nodiscard]] virtual bool isTextureAttachment() const = 0;
 };
 
-} // namespace priv
-
-} // namespace sf
+} // namespace sf::priv

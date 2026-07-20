@@ -25,8 +25,8 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Graphics/GLCheck.hpp>
-#include <SFML/Graphics/GLExtensions.hpp>
+#include <SFML/Graphics/OpenGL/GLCheck.hpp>
+#include <SFML/Graphics/OpenGL/GLExtensions.hpp>
 
 #include <SFML/Window/Context.hpp>
 

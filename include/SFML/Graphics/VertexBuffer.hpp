@@ -33,7 +33,7 @@
 #include <SFML/Graphics/PrimitiveType.hpp>
 #include <SFML/Graphics/RenderStates.hpp>
 
-#include <SFML/Window/GlResource.hpp>
+#include <memory>
 
 #include <cstddef>
 
@@ -43,11 +43,17 @@ namespace sf
 class RenderTarget;
 struct Vertex;
 
+namespace priv
+{
+class GraphicsDevice;
+class VertexBufferImpl;
+} // namespace priv
+
 ////////////////////////////////////////////////////////////
 /// \brief Vertex buffer storage for one or more 2D primitives
 ///
 ////////////////////////////////////////////////////////////
-class SFML_GRAPHICS_API VertexBuffer : public Drawable, private GlResource
+class SFML_GRAPHICS_API VertexBuffer : public Drawable
 {
 public:
     ////////////////////////////////////////////////////////////
@@ -73,7 +79,7 @@ public:
     /// Creates an empty vertex buffer.
     ///
     ////////////////////////////////////////////////////////////
-    VertexBuffer() = default;
+    VertexBuffer();
 
     ////////////////////////////////////////////////////////////
     /// \brief Construct a `VertexBuffer` with a specific `PrimitiveType`
@@ -287,29 +293,6 @@ public:
     [[nodiscard]] Usage getUsage() const;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Bind a vertex buffer for rendering
-    ///
-    /// This function is not part of the graphics API, it mustn't be
-    /// used when drawing SFML entities. It must be used only if you
-    /// mix `sf::VertexBuffer` with OpenGL code.
-    ///
-    /// \code
-    /// sf::VertexBuffer vb1, vb2;
-    /// ...
-    /// sf::VertexBuffer::bind(&vb1);
-    /// // draw OpenGL stuff that use vb1...
-    /// sf::VertexBuffer::bind(&vb2);
-    /// // draw OpenGL stuff that use vb2...
-    /// sf::VertexBuffer::bind(nullptr);
-    /// // draw OpenGL stuff that use no vertex buffer...
-    /// \endcode
-    ///
-    /// \param vertexBuffer Pointer to the vertex buffer to bind, can be null to use no vertex buffer
-    ///
-    ////////////////////////////////////////////////////////////
-    static void bind(const VertexBuffer* vertexBuffer);
-
-    ////////////////////////////////////////////////////////////
     /// \brief Tell whether or not the system supports vertex buffers
     ///
     /// This function should always be called before using
@@ -334,7 +317,9 @@ private:
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    unsigned int  m_buffer{};                             //!< Internal buffer identifier
+    std::shared_ptr<priv::GraphicsDevice>   m_device; //!< Graphics device, kept alive for the lifetime of the buffer
+    std::unique_ptr<priv::VertexBufferImpl> m_impl;   //!< Backend buffer implementation, null before creation
+
     std::size_t   m_size{};                               //!< Size in Vertices of the currently allocated buffer
     PrimitiveType m_primitiveType{PrimitiveType::Points}; //!< Type of primitives to draw
     Usage         m_usage{Usage::Stream};                 //!< How this vertex buffer is to be used

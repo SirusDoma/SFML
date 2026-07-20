@@ -35,7 +35,9 @@
 #include <SFML/Graphics/Drawable.hpp>
 #include <SFML/Graphics/Font.hpp>
 #include <SFML/Graphics/Glyph.hpp>
+#include <SFML/Graphics/GraphicsBackend.hpp>
 #include <SFML/Graphics/Image.hpp>
+#include <SFML/Graphics/OpenGLInterop.hpp>
 #include <SFML/Graphics/PrimitiveType.hpp>
 #include <SFML/Graphics/Rect.hpp>
 #include <SFML/Graphics/RectangleShape.hpp>

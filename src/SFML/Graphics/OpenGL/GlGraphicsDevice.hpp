@@ -27,119 +27,111 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/System/Vector2.hpp>
+#include <SFML/Graphics/GraphicsDevice.hpp>
+
+#include <SFML/Window/GlResource.hpp>
 
 
-namespace sf
+namespace sf::priv
 {
-
-struct ContextSettings;
-
-namespace priv
-{
-class TextureImpl;
-
 ////////////////////////////////////////////////////////////
-/// \brief Abstract base class for render-texture implementations
+/// \brief OpenGL implementation of the graphics device
+///
+/// Deriving from GlResource keeps the shared OpenGL context
+/// alive for the lifetime of the device.
 ///
 ////////////////////////////////////////////////////////////
-class RenderTextureImpl
+class GlGraphicsDevice : public GraphicsDevice, GlResource
 {
 public:
     ////////////////////////////////////////////////////////////
     /// \brief Default constructor
     ///
     ////////////////////////////////////////////////////////////
-    RenderTextureImpl() = default;
+    GlGraphicsDevice() = default;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Destructor
+    /// \brief Create a render target implementation for this backend
+    ///
+    /// \return New render target implementation
     ///
     ////////////////////////////////////////////////////////////
-    virtual ~RenderTextureImpl() = default;
+    [[nodiscard]] std::unique_ptr<RenderTargetImpl> createRenderTargetImpl() override;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Deleted copy constructor
+    /// \brief Create a render texture implementation for this backend
+    ///
+    /// The most capable implementation available is selected.
+    ///
+    /// \return New render texture implementation
     ///
     ////////////////////////////////////////////////////////////
-    RenderTextureImpl(const RenderTextureImpl&) = delete;
+    [[nodiscard]] std::unique_ptr<RenderTextureImpl> createRenderTextureImpl() override;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Deleted copy assignment
+    /// \brief Create a presentation surface for a render window
+    ///
+    /// The OpenGL backend presents through the context owned by
+    /// `sf::Window`, so a null pointer is returned.
+    ///
+    /// \param handle       Native handle of the window to present to
+    /// \param settings     Requested settings for the surface
+    /// \param bitsPerPixel Pixel depth of the window, in bits per pixel
+    ///
+    /// \return Always a null pointer for the legacy path
     ///
     ////////////////////////////////////////////////////////////
-    RenderTextureImpl& operator=(const RenderTextureImpl&) = delete;
+    [[nodiscard]] std::unique_ptr<RenderWindowImpl> createRenderWindowImpl(WindowHandle           handle,
+                                                                           const ContextSettings& settings,
+                                                                           unsigned int bitsPerPixel) override;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Create the render texture implementation
+    /// \brief Create a shader implementation for this backend
     ///
-    /// \param size     Width and height of the texture to render to
-    /// \param texture  Target texture implementation
-    /// \param settings Context settings to create render-texture with
-    ///
-    /// \return `true` if creation has been successful
+    /// \return New shader implementation
     ///
     ////////////////////////////////////////////////////////////
-    virtual bool create(Vector2u size, TextureImpl& texture, const ContextSettings& settings) = 0;
+    [[nodiscard]] std::unique_ptr<ShaderImpl> createShaderImpl() override;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Activate or deactivate the render texture for rendering
+    /// \brief Create a texture implementation for this backend
     ///
-    /// \param active `true` to activate, `false` to deactivate
-    ///
-    /// \return `true` on success, `false` on failure
+    /// \return New texture implementation
     ///
     ////////////////////////////////////////////////////////////
-    virtual bool activate(bool active) = 0;
+    [[nodiscard]] std::unique_ptr<TextureImpl> createTextureImpl() override;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Tell if the render-texture will use sRGB encoding when drawing on it
+    /// \brief Create a vertex buffer implementation for this backend
     ///
-    /// You can request sRGB encoding for a render-texture
-    /// by having the sRgbCapable flag set for the context parameter of create() method
-    ///
-    /// \return `true` if the render-texture use sRGB encoding, `false` otherwise
+    /// \return New vertex buffer implementation
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] virtual bool isSrgb() const = 0;
+    [[nodiscard]] std::unique_ptr<VertexBufferImpl> createVertexBufferImpl() override;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Update the pixels of the target texture
+    /// \brief Get the maximum anti-aliasing level supported for render textures
     ///
-    /// \param texture Target texture implementation
+    /// \return The maximum anti-aliasing level supported
     ///
     ////////////////////////////////////////////////////////////
-    virtual void updateTexture(TextureImpl& texture) = 0;
+    [[nodiscard]] unsigned int getMaximumAntiAliasingLevel() override;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Tell whether the rendered pixels end up flipped vertically in the target texture
+    /// \brief Get the backend this device renders through
     ///
-    /// \return `true` if the target texture's pixels are flipped
+    /// \return The graphics backend
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] virtual bool arePixelsFlipped() const = 0;
+    [[nodiscard]] GraphicsBackend getBackend() const override;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Tell whether displaying requires a full activation of the render texture
+    /// \brief Get the shading language this backend consumes
     ///
-    /// Implementations that render into a separate context need a
-    /// full activation before their pixels can be copied to the
-    /// target texture; others only need render-target tracking.
-    ///
-    /// \return `true` if display() must fully activate the render texture
+    /// \return The shading language
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] virtual bool needsFullActivationForDisplay() const = 0;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Tell whether the target texture is attached to the render surface
-    ///
-    /// \return `true` if the target texture is rendered to directly (e.g. a framebuffer attachment)
-    ///
-    ////////////////////////////////////////////////////////////
-    [[nodiscard]] virtual bool isTextureAttachment() const = 0;
+    [[nodiscard]] ShadingLanguage getShadingLanguage() const override;
 };
 
-} // namespace priv
-
-} // namespace sf
+} // namespace sf::priv

@@ -25,10 +25,10 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Graphics/GLCheck.hpp>
-#include <SFML/Graphics/GLExtensions.hpp>
 #include <SFML/Graphics/Image.hpp>
-#include <SFML/Graphics/RenderTextureImplFBO.hpp>
+#include <SFML/Graphics/OpenGL/GLCheck.hpp>
+#include <SFML/Graphics/OpenGL/GLExtensions.hpp>
+#include <SFML/Graphics/OpenGL/RenderTextureImplFBO.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
 
 #include <SFML/Window/VideoMode.hpp>

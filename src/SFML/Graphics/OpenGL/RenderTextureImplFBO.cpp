@@ -25,9 +25,10 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Graphics/GLCheck.hpp>
-#include <SFML/Graphics/GLExtensions.hpp>
-#include <SFML/Graphics/RenderTextureImplFBO.hpp>
+#include <SFML/Graphics/OpenGL/GLCheck.hpp>
+#include <SFML/Graphics/OpenGL/GLExtensions.hpp>
+#include <SFML/Graphics/OpenGL/RenderTextureImplFBO.hpp>
+#include <SFML/Graphics/TextureImpl.hpp>
 
 #include <SFML/Window/Context.hpp>
 #include <SFML/Window/ContextSettings.hpp>
@@ -139,7 +140,7 @@ void RenderTextureImplFBO::unbind()
 
 
 ////////////////////////////////////////////////////////////
-bool RenderTextureImplFBO::create(Vector2u size, unsigned int textureId, const ContextSettings& settings)
+bool RenderTextureImplFBO::create(Vector2u size, TextureImpl& texture, const ContextSettings& settings)
 {
     // Store the dimensions
     m_size = size;
@@ -348,7 +349,7 @@ bool RenderTextureImplFBO::create(Vector2u size, unsigned int textureId, const C
     }
 
     // Save our texture ID in order to be able to attach it to an FBO at any time
-    m_textureId = textureId;
+    m_textureId = texture.getNativeHandle();
 
     // We can't create an FBO now if there is no active context
     if (!Context::getActiveContextId())
@@ -588,7 +589,7 @@ bool RenderTextureImplFBO::isSrgb() const
 
 
 ////////////////////////////////////////////////////////////
-void RenderTextureImplFBO::updateTexture(unsigned int)
+void RenderTextureImplFBO::updateTexture(TextureImpl&)
 {
     // If multisampling is enabled, we need to resolve by blitting
     // from our FBO with multisample renderbuffer attachments
@@ -642,6 +643,27 @@ void RenderTextureImplFBO::updateTexture(unsigned int)
     }
 
 #endif // SFML_OPENGL_ES
+}
+
+
+////////////////////////////////////////////////////////////
+bool RenderTextureImplFBO::arePixelsFlipped() const
+{
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////
+bool RenderTextureImplFBO::needsFullActivationForDisplay() const
+{
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////
+bool RenderTextureImplFBO::isTextureAttachment() const
+{
+    return true;
 }
 
 } // namespace sf::priv

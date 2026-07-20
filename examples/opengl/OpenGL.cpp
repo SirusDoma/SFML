@@ -126,7 +126,7 @@ int main()
 
         // Bind the texture
         glEnable(GL_TEXTURE_2D);
-        sf::Texture::bind(&texture);
+        sf::OpenGL::bind(&texture);
 
         // Define a 3D cube (6 faces made of 2 triangles composed by 3 vertices)
         // clang-format off
@@ -225,7 +225,7 @@ int main()
                         texture = sf::Texture(resourcesDir() / "logo.png");
 
                         // Rebind the texture
-                        sf::Texture::bind(&texture);
+                        sf::OpenGL::bind(&texture);
 
                         mipmapEnabled = false;
                     }
@@ -281,9 +281,9 @@ int main()
             }
 
             // Draw the background
-            window.pushGLStates();
+            sf::OpenGL::pushStates(window);
             window.draw(background);
-            window.popGLStates();
+            sf::OpenGL::popStates(window);
 
             // Make the window the active window for OpenGL calls
             if (!window.setActive(true))
@@ -323,11 +323,11 @@ int main()
             }
 
             // Draw some text on top of our OpenGL object
-            window.pushGLStates();
+            sf::OpenGL::pushStates(window);
             window.draw(text);
             window.draw(sRgbInstructions);
             window.draw(mipmapInstructions);
-            window.popGLStates();
+            sf::OpenGL::popStates(window);
 
             // Finally, display the rendered frame on screen
             window.display();

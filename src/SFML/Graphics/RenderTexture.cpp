@@ -25,14 +25,13 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
+#include <SFML/Graphics/GraphicsDevice.hpp>
 #include <SFML/Graphics/RenderTexture.hpp>
-#include <SFML/Graphics/RenderTextureImplDefault.hpp>
-#include <SFML/Graphics/RenderTextureImplFBO.hpp>
+#include <SFML/Graphics/RenderTextureImpl.hpp>
 
 #include <SFML/System/Err.hpp>
 #include <SFML/System/Exception.hpp>
 
-#include <memory>
 #include <ostream>
 
 #include <cassert>
@@ -79,23 +78,15 @@ bool RenderTexture::resize(Vector2u size, const ContextSettings& settings)
     setSmooth(false);
 
     // Create the implementation
-    if (priv::RenderTextureImplFBO::isAvailable())
-    {
-        // Use frame-buffer object (FBO)
-        m_impl = std::make_unique<priv::RenderTextureImplFBO>();
+    m_impl = priv::ensureGraphicsDevice()->createRenderTextureImpl();
 
-        // Mark the texture as being a framebuffer object attachment
+    // Mark the texture as being a framebuffer object attachment
+    if (m_impl->isTextureAttachment())
         m_texture.m_fboAttachment = true;
-    }
-    else
-    {
-        // Use default implementation
-        m_impl = std::make_unique<priv::RenderTextureImplDefault>();
-    }
 
     // Initialize the render texture
     // We pass the actual size of our texture since OpenGL ES requires that all attachments have identical sizes
-    if (!m_impl->create(m_texture.m_actualSize, m_texture.m_texture, settings))
+    if (!m_impl->create(m_texture.m_actualSize, *m_texture.m_impl, settings))
         return false;
 
     // We can now initialize the render target part
@@ -108,12 +99,7 @@ bool RenderTexture::resize(Vector2u size, const ContextSettings& settings)
 ////////////////////////////////////////////////////////////
 unsigned int RenderTexture::getMaximumAntiAliasingLevel()
 {
-    if (priv::RenderTextureImplFBO::isAvailable())
-    {
-        return priv::RenderTextureImplFBO::getMaximumAntiAliasingLevel();
-    }
-
-    return priv::RenderTextureImplDefault::getMaximumAntiAliasingLevel();
+    return priv::ensureGraphicsDevice()->getMaximumAntiAliasingLevel();
 }
 
 
@@ -169,7 +155,7 @@ void RenderTexture::display()
     if (!m_impl)
         return;
 
-    if (priv::RenderTextureImplFBO::isAvailable())
+    if (!m_impl->needsFullActivationForDisplay())
     {
         // Perform a RenderTarget-only activation if we are using FBOs
         if (!RenderTarget::setActive())
@@ -183,8 +169,8 @@ void RenderTexture::display()
     }
 
     // Update the target texture
-    m_impl->updateTexture(m_texture.m_texture);
-    m_texture.m_pixelsFlipped = true;
+    m_impl->updateTexture(*m_texture.m_impl);
+    m_texture.m_pixelsFlipped = m_impl->arePixelsFlipped();
     m_texture.invalidateMipmap();
 }
 

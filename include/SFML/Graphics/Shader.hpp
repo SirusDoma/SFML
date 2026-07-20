@@ -31,12 +31,10 @@
 
 #include <SFML/Graphics/Glsl.hpp>
 
-#include <SFML/Window/GlResource.hpp>
-
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 
 #include <cstddef>
 
@@ -46,11 +44,18 @@ namespace sf
 class InputStream;
 class Texture;
 
+namespace priv
+{
+class GlShaderImpl;
+class GraphicsDevice;
+class ShaderImpl;
+} // namespace priv
+
 ////////////////////////////////////////////////////////////
 /// \brief Shader class (vertex, geometry and fragment)
 ///
 ////////////////////////////////////////////////////////////
-class SFML_GRAPHICS_API Shader : GlResource
+class SFML_GRAPHICS_API Shader
 {
 public:
     ////////////////////////////////////////////////////////////
@@ -93,7 +98,7 @@ public:
     /// binding any shader.
     ///
     ////////////////////////////////////////////////////////////
-    Shader() = default;
+    Shader();
 
     ////////////////////////////////////////////////////////////
     /// \brief Destructor
@@ -791,29 +796,6 @@ public:
     [[nodiscard]] unsigned int getNativeHandle() const;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Bind a shader for rendering
-    ///
-    /// This function is not part of the graphics API, it mustn't be
-    /// used when drawing SFML entities. It must be used only if you
-    /// mix `sf::Shader` with OpenGL code.
-    ///
-    /// \code
-    /// sf::Shader s1, s2;
-    /// ...
-    /// sf::Shader::bind(&s1);
-    /// // draw OpenGL stuff that use s1...
-    /// sf::Shader::bind(&s2);
-    /// // draw OpenGL stuff that use s2...
-    /// sf::Shader::bind(nullptr);
-    /// // draw OpenGL stuff that use no shader...
-    /// \endcode
-    ///
-    /// \param shader Shader to bind, can be null to use no shader
-    ///
-    ////////////////////////////////////////////////////////////
-    static void bind(const Shader* shader);
-
-    ////////////////////////////////////////////////////////////
     /// \brief Tell whether or not the system supports shaders
     ///
     /// This function should always be called before using
@@ -845,6 +827,8 @@ public:
     [[nodiscard]] static bool isGeometryAvailable();
 
 private:
+    friend class priv::GlShaderImpl;
+
     ////////////////////////////////////////////////////////////
     /// \brief Compile the shader(s) and create the program
     ///
@@ -863,46 +847,10 @@ private:
                                std::string_view fragmentShaderCode);
 
     ////////////////////////////////////////////////////////////
-    /// \brief Bind all the textures used by the shader
-    ///
-    /// This function each texture to a different unit, and
-    /// updates the corresponding variables in the shader accordingly.
-    ///
-    ////////////////////////////////////////////////////////////
-    void bindTextures() const;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Get the location ID of a shader uniform
-    ///
-    /// \param name Name of the uniform variable to search
-    ///
-    /// \return Location ID of the uniform, or -1 if not found
-    ///
-    ////////////////////////////////////////////////////////////
-    int getUniformLocation(const std::string& name);
-
-    ////////////////////////////////////////////////////////////
-    /// \brief RAII object to save and restore the program
-    ///        binding while uniforms are being set
-    ///
-    /// Implementation is private in the .cpp file.
-    ///
-    ////////////////////////////////////////////////////////////
-    struct UniformBinder;
-
-    ////////////////////////////////////////////////////////////
-    // Types
-    ////////////////////////////////////////////////////////////
-    using TextureTable = std::unordered_map<int, const Texture*>;
-    using UniformTable = std::unordered_map<std::string, int>;
-
-    ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    unsigned int m_shaderProgram{};    //!< OpenGL identifier for the program
-    int          m_currentTexture{-1}; //!< Location of the current texture in the shader
-    TextureTable m_textures;           //!< Texture variables in the shader, mapped to their location
-    UniformTable m_uniforms;           //!< Parameters location cache
+    std::shared_ptr<priv::GraphicsDevice> m_device; //!< Graphics device, kept alive for the lifetime of the shader
+    std::unique_ptr<priv::ShaderImpl>     m_impl;   //!< Backend shader implementation, null before loading
 };
 
 } // namespace sf
@@ -1013,9 +961,9 @@ private:
 /// `sf::Shader` can also be used directly as a raw shader for
 /// custom OpenGL geometry.
 /// \code
-/// sf::Shader::bind(&shader);
+/// sf::OpenGL::bindShader(&shader);
 /// ... render OpenGL geometry ...
-/// sf::Shader::bind(nullptr);
+/// sf::OpenGL::bindShader(nullptr);
 /// \endcode
 ///
 /// \see `sf::Glsl`
