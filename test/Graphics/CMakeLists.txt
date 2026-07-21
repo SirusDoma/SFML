@@ -1,5 +1,6 @@
 
 set(GRAPHICS_SRC
+    BackendParity.test.cpp
     BlendMode.test.cpp
     CircleShape.test.cpp
     Color.test.cpp
@@ -39,6 +40,15 @@ endif()
 sfml_add_test(test-sfml-graphics "${GRAPHICS_SRC}" SFML::Graphics)
 if(SFML_RUN_DISPLAY_TESTS)
     target_compile_definitions(test-sfml-graphics PRIVATE SFML_RUN_DISPLAY_TESTS)
+endif()
+
+# Run the same rendering checks on the Direct3D 11 backend
+if(SFML_OS_WINDOWS AND SFML_ENABLE_D3D11)
+    sfml_add_test(test-sfml-graphics-d3d11 "BackendParity.test.cpp" SFML::Graphics)
+    target_compile_definitions(test-sfml-graphics-d3d11 PRIVATE SFML_TEST_BACKEND_D3D11)
+    if(SFML_RUN_DISPLAY_TESTS)
+        target_compile_definitions(test-sfml-graphics-d3d11 PRIVATE SFML_RUN_DISPLAY_TESTS)
+    endif()
 endif()
 
 if (XCODE AND SFML_OS_IOS)
