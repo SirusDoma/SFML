@@ -36,6 +36,7 @@
 #include <SFML/System/Vector2.hpp>
 
 #include <array>
+#include <atomic>
 #include <d3d11_1.h>
 #include <memory>
 #include <mutex>
@@ -542,6 +543,7 @@ private:
 
     std::vector<Vertex> m_pendingVertices; //!< Vertices of merged draws awaiting submission
     D3D11_PRIMITIVE_TOPOLOGY m_pendingTopology{D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST}; //!< Topology of the pending vertices
+    std::atomic<bool> m_hasPendingDraws{}; //!< Lock-free hint that vertices are pending, verified under the lock
 
     std::unordered_map<std::uint32_t, ComPtr<ID3D11BlendState>> m_blendStates; //!< Cache of blend state objects, keyed by packed blend mode
     std::unordered_map<std::uint32_t, ComPtr<ID3D11DepthStencilState>> m_depthStencilStates; //!< Cache of depth-stencil state objects, keyed by packed stencil mode

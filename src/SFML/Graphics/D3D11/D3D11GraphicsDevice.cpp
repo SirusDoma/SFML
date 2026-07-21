@@ -871,12 +871,18 @@ void D3D11GraphicsDevice::appendPendingVertices(const Vertex* vertices, std::siz
 
     m_pendingTopology = topology;
     m_pendingVertices.insert(m_pendingVertices.end(), vertices, vertices + vertexCount);
+    m_hasPendingDraws.store(true, std::memory_order_relaxed);
 }
 
 
 ////////////////////////////////////////////////////////////
 void D3D11GraphicsDevice::flushPendingDraws()
 {
+    // Draws only become pending on the rendering thread, which always observes its own
+    // appends, so flushes that have nothing to do can skip the lock entirely
+    if (!m_hasPendingDraws.load(std::memory_order_relaxed))
+        return;
+
     const ContextLock lock(*this);
 
     if (m_pendingVertices.empty())
@@ -891,6 +897,7 @@ void D3D11GraphicsDevice::flushPendingDraws()
     }
 
     m_pendingVertices.clear();
+    m_hasPendingDraws.store(false, std::memory_order_relaxed);
 }
 
 
