@@ -31,9 +31,11 @@
 
 #include <SFML/System/Err.hpp>
 
+#include <algorithm>
 #include <ostream>
 
 #include <cstddef>
+#include <cstring>
 
 
 namespace sf::priv
@@ -45,7 +47,7 @@ D3D11VertexBufferImpl::D3D11VertexBufferImpl(D3D11GraphicsDevice& device) : m_de
 
 
 ////////////////////////////////////////////////////////////
-bool D3D11VertexBufferImpl::create(std::size_t vertexCount, [[maybe_unused]] VertexBuffer::Usage usage)
+bool D3D11VertexBufferImpl::create(std::size_t vertexCount, VertexBuffer::Usage usage)
 {
     ID3D11Device* device = m_device.getDevice();
     if (!device)
@@ -55,13 +57,25 @@ bool D3D11VertexBufferImpl::create(std::size_t vertexCount, [[maybe_unused]] Ver
     }
 
     m_buffer.Reset();
+    m_dynamic = (usage != VertexBuffer::Usage::Static);
 
+    // Frequently rewritten buffers use dynamic memory updated through discard maps,
+    // a CPU copy keeps partial updates possible without touching in-flight contents
     D3D11_BUFFER_DESC desc{};
-    desc.ByteWidth = static_cast<UINT>(sizeof(Vertex) * vertexCount);
-    desc.Usage     = D3D11_USAGE_DEFAULT;
-    desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    desc.ByteWidth      = static_cast<UINT>(sizeof(Vertex) * vertexCount);
+    desc.Usage          = m_dynamic ? D3D11_USAGE_DYNAMIC : D3D11_USAGE_DEFAULT;
+    desc.BindFlags      = D3D11_BIND_VERTEX_BUFFER;
+    desc.CPUAccessFlags = m_dynamic ? D3D11_CPU_ACCESS_WRITE : 0u;
 
-    return d3dCheck(device->CreateBuffer(&desc, nullptr, &m_buffer));
+    if (!d3dCheck(device->CreateBuffer(&desc, nullptr, &m_buffer)))
+        return false;
+
+    if (m_dynamic)
+        m_shadow.assign(vertexCount, Vertex{});
+    else
+        m_shadow.clear();
+
+    return true;
 }
 
 
@@ -87,6 +101,20 @@ bool D3D11VertexBufferImpl::update(const Vertex*       vertices,
 
     const D3D11GraphicsDevice::ContextLock lock(m_device);
 
+    if (m_dynamic)
+    {
+        std::copy(vertices, vertices + vertexCount, m_shadow.begin() + offset);
+
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        if (!d3dCheck(context->Map(m_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+            return false;
+
+        std::memcpy(mapped.pData, m_shadow.data(), sizeof(Vertex) * m_shadow.size());
+        context->Unmap(m_buffer.Get(), 0);
+
+        return true;
+    }
+
     const D3D11_BOX box{static_cast<UINT>(sizeof(Vertex) * offset),
                         0,
                         0,
@@ -104,11 +132,56 @@ bool D3D11VertexBufferImpl::update(const VertexBufferImpl& other, std::size_t ot
 {
     const auto& d3dOther = static_cast<const D3D11VertexBufferImpl&>(other);
 
+    ID3D11Device*        device  = m_device.getDevice();
     ID3D11DeviceContext* context = m_device.getContext();
-    if (!m_buffer || !d3dOther.m_buffer || !context)
+    if (!m_buffer || !d3dOther.m_buffer || !device || !context)
         return false;
 
     const D3D11GraphicsDevice::ContextLock lock(m_device);
+
+    if (m_dynamic)
+    {
+        // Dynamic buffers cannot be GPU copy destinations, route the contents through the CPU copy
+        if (otherSize > m_shadow.size())
+            return false;
+
+        if (d3dOther.m_dynamic)
+        {
+            std::copy(d3dOther.m_shadow.begin(),
+                      d3dOther.m_shadow.begin() + static_cast<std::ptrdiff_t>(otherSize),
+                      m_shadow.begin());
+        }
+        else
+        {
+            D3D11_BUFFER_DESC desc{};
+            d3dOther.m_buffer->GetDesc(&desc);
+            desc.Usage          = D3D11_USAGE_STAGING;
+            desc.BindFlags      = 0;
+            desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+
+            ComPtr<ID3D11Buffer> staging;
+            if (!d3dCheck(device->CreateBuffer(&desc, nullptr, &staging)))
+                return false;
+
+            context->CopyResource(staging.Get(), d3dOther.m_buffer.Get());
+
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (!d3dCheck(context->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped)))
+                return false;
+
+            std::memcpy(m_shadow.data(), mapped.pData, sizeof(Vertex) * otherSize);
+            context->Unmap(staging.Get(), 0);
+        }
+
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        if (!d3dCheck(context->Map(m_buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+            return false;
+
+        std::memcpy(mapped.pData, m_shadow.data(), sizeof(Vertex) * m_shadow.size());
+        context->Unmap(m_buffer.Get(), 0);
+
+        return true;
+    }
 
     const D3D11_BOX box{0, 0, 0, static_cast<UINT>(sizeof(Vertex) * otherSize), 1, 1};
     context->CopySubresourceRegion(m_buffer.Get(), 0, 0, 0, 0, d3dOther.m_buffer.Get(), 0, &box);

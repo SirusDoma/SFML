@@ -28,7 +28,10 @@
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Graphics/D3D11/D3D11GraphicsDevice.hpp>
+#include <SFML/Graphics/Vertex.hpp>
 #include <SFML/Graphics/VertexBufferImpl.hpp>
+
+#include <vector>
 
 
 namespace sf::priv
@@ -111,8 +114,10 @@ private:
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    D3D11GraphicsDevice& m_device; //!< Graphics device the buffer lives on
-    ComPtr<ID3D11Buffer> m_buffer; //!< Backend buffer object
+    D3D11GraphicsDevice& m_device;    //!< Graphics device the buffer lives on
+    ComPtr<ID3D11Buffer> m_buffer;    //!< Backend buffer object
+    std::vector<Vertex>  m_shadow;    //!< CPU copy of dynamic buffers, allows partial updates through discard maps
+    bool                 m_dynamic{}; //!< Whether the buffer uses dynamic memory
 };
 
 } // namespace sf::priv
