@@ -1,0 +1,5 @@
+// Generated from DefaultShader.hlsl, used when no shader compiler was available at build time
+
+constexpr const char* defaultShaderSource = R"SFMLSHADER(
+@SFML_D3D11_DEFAULT_SHADER@
+)SFMLSHADER";

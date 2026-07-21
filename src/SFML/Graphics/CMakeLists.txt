@@ -123,8 +123,31 @@ if(SFML_OS_WINDOWS AND SFML_ENABLE_D3D11)
         ${SRCROOT}/D3D11/D3D11Utils.hpp
         ${SRCROOT}/D3D11/D3D11VertexBufferImpl.cpp
         ${SRCROOT}/D3D11/D3D11VertexBufferImpl.hpp
+        ${SRCROOT}/D3D11/DefaultShader.hlsl
     )
     source_group("d3d11" FILES ${D3D11_SRC})
+    set_source_files_properties(${SRCROOT}/D3D11/DefaultShader.hlsl PROPERTIES HEADER_FILE_ONLY TRUE)
+
+    # The built-in shaders are compiled to bytecode at build time when the shader compiler
+    # is available, otherwise the source is embedded and compiled at run time
+    find_program(SFML_D3D11_FXC fxc)
+    if(SFML_D3D11_FXC)
+        add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/D3D11DefaultVertexShader.hpp
+                           COMMAND ${SFML_D3D11_FXC} /nologo /T vs_4_0 /E VSMain /O3 /Vn defaultVertexShaderBytecode /Fh ${CMAKE_CURRENT_BINARY_DIR}/D3D11DefaultVertexShader.hpp ${SRCROOT}/D3D11/DefaultShader.hlsl
+                           DEPENDS ${SRCROOT}/D3D11/DefaultShader.hlsl
+                           COMMENT "Compiling the built-in Direct3D 11 vertex shader")
+        add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/D3D11DefaultPixelShader.hpp
+                           COMMAND ${SFML_D3D11_FXC} /nologo /T ps_4_0 /E PSMain /O3 /Vn defaultPixelShaderBytecode /Fh ${CMAKE_CURRENT_BINARY_DIR}/D3D11DefaultPixelShader.hpp ${SRCROOT}/D3D11/DefaultShader.hlsl
+                           DEPENDS ${SRCROOT}/D3D11/DefaultShader.hlsl
+                           COMMENT "Compiling the built-in Direct3D 11 pixel shader")
+        list(APPEND D3D11_SRC
+            ${CMAKE_CURRENT_BINARY_DIR}/D3D11DefaultVertexShader.hpp
+            ${CMAKE_CURRENT_BINARY_DIR}/D3D11DefaultPixelShader.hpp)
+    else()
+        file(READ ${SRCROOT}/D3D11/DefaultShader.hlsl SFML_D3D11_DEFAULT_SHADER)
+        configure_file(${SRCROOT}/D3D11/D3D11DefaultShaderSource.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/D3D11DefaultShaderSource.hpp @ONLY)
+        list(APPEND D3D11_SRC ${CMAKE_CURRENT_BINARY_DIR}/D3D11DefaultShaderSource.hpp)
+    endif()
 endif()
 
 
@@ -137,6 +160,23 @@ sfml_add_library(Graphics
 if(SFML_OS_WINDOWS AND SFML_ENABLE_D3D11)
     target_compile_definitions(sfml-graphics PRIVATE "SFML_ENABLE_D3D11")
     target_link_libraries(sfml-graphics PRIVATE d3d11 dxgi d3dcompiler)
+    target_include_directories(sfml-graphics PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
+    if(SFML_D3D11_FXC)
+        target_compile_definitions(sfml-graphics PRIVATE "SFML_D3D11_PRECOMPILED_SHADERS")
+
+        # With the built-in shaders precompiled, the compiler DLL is only needed for user
+        # shaders, delay-loading it lets applications start on systems that lack it
+        if(SFML_COMPILER_MSVC)
+            if(BUILD_SHARED_LIBS)
+                target_link_options(sfml-graphics PRIVATE /DELAYLOAD:d3dcompiler_47.dll)
+                target_link_libraries(sfml-graphics PRIVATE delayimp)
+            else()
+                target_link_options(sfml-graphics PUBLIC /DELAYLOAD:d3dcompiler_47.dll)
+                target_link_libraries(sfml-graphics PUBLIC delayimp)
+            endif()
+        endif()
+    endif()
 endif()
 
 # setup dependencies

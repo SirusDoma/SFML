@@ -45,52 +45,18 @@
 #include <cstring>
 
 
+// The built-in shaders live in DefaultShader.hlsl, either precompiled to bytecode
+// at build time or embedded as source and compiled when the device is created
+#ifdef SFML_D3D11_PRECOMPILED_SHADERS
+#include <D3D11DefaultPixelShader.hpp>
+#include <D3D11DefaultVertexShader.hpp>
+#else
+#include <D3D11DefaultShaderSource.hpp>
+#endif
+
+
 namespace
 {
-// Built-in shaders replicating the fixed-function behavior of the OpenGL backend:
-// transformed position, vertex color modulated with the sampled texture, texture
-// coordinates run through a matrix to support pixel coordinates and padded sizes.
-// Untextured draws bind a 1x1 white texture so a single pixel shader covers both cases.
-constexpr const char* defaultShaderSource = R"(
-cbuffer SFMLMatrices : register(b0)
-{
-    column_major float4x4 sfmlModelView;
-    column_major float4x4 sfmlProjection;
-    column_major float4x4 sfmlTextureMatrix;
-};
-
-struct VSInput
-{
-    float2 position  : POSITION;
-    float4 color     : COLOR0;
-    float2 texCoords : TEXCOORD0;
-};
-
-struct PSInput
-{
-    float4 position  : SV_POSITION;
-    float4 color     : COLOR0;
-    float2 texCoords : TEXCOORD0;
-};
-
-PSInput VSMain(VSInput input)
-{
-    PSInput output;
-    output.position  = mul(sfmlProjection, mul(sfmlModelView, float4(input.position, 0.0f, 1.0f)));
-    output.color     = input.color;
-    output.texCoords = mul(sfmlTextureMatrix, float4(input.texCoords, 0.0f, 1.0f)).xy;
-    return output;
-}
-
-Texture2D sfmlTexture : register(t0);
-SamplerState sfmlSampler : register(s0);
-
-float4 PSMain(PSInput input) : SV_TARGET
-{
-    return input.color * sfmlTexture.Sample(sfmlSampler, input.texCoords);
-}
-)";
-
 // Convert an sf::BlendMode::Factor to the corresponding blend factor for the color channels
 D3D11_BLEND factorToD3d(sf::BlendMode::Factor blendFactor)
 {
@@ -904,6 +870,12 @@ void D3D11GraphicsDevice::flushPendingDraws()
 ////////////////////////////////////////////////////////////
 void D3D11GraphicsDevice::createPipeline()
 {
+#ifdef SFML_D3D11_PRECOMPILED_SHADERS
+    const void*       vertexShaderBytecode = defaultVertexShaderBytecode;
+    const std::size_t vertexShaderSize     = sizeof(defaultVertexShaderBytecode);
+    const void*       pixelShaderBytecode  = defaultPixelShaderBytecode;
+    const std::size_t pixelShaderSize      = sizeof(defaultPixelShaderBytecode);
+#else
     // Compile the built-in shaders
     ComPtr<ID3DBlob> vertexShaderBlob;
     ComPtr<ID3DBlob> pixelShaderBlob;
@@ -938,14 +910,14 @@ void D3D11GraphicsDevice::createPipeline()
         return;
     }
 
-    d3dCheck(m_device->CreateVertexShader(vertexShaderBlob->GetBufferPointer(),
-                                          vertexShaderBlob->GetBufferSize(),
-                                          nullptr,
-                                          &m_defaultVertexShader));
-    d3dCheck(m_device->CreatePixelShader(pixelShaderBlob->GetBufferPointer(),
-                                         pixelShaderBlob->GetBufferSize(),
-                                         nullptr,
-                                         &m_defaultPixelShader));
+    const void*       vertexShaderBytecode = vertexShaderBlob->GetBufferPointer();
+    const std::size_t vertexShaderSize     = vertexShaderBlob->GetBufferSize();
+    const void*       pixelShaderBytecode  = pixelShaderBlob->GetBufferPointer();
+    const std::size_t pixelShaderSize      = pixelShaderBlob->GetBufferSize();
+#endif
+
+    d3dCheck(m_device->CreateVertexShader(vertexShaderBytecode, vertexShaderSize, nullptr, &m_defaultVertexShader));
+    d3dCheck(m_device->CreatePixelShader(pixelShaderBytecode, pixelShaderSize, nullptr, &m_defaultPixelShader));
 
     // Input layout matching sf::Vertex
     constexpr std::array<D3D11_INPUT_ELEMENT_DESC, 3> layout = {
@@ -955,8 +927,8 @@ void D3D11GraphicsDevice::createPipeline()
 
     d3dCheck(m_device->CreateInputLayout(layout.data(),
                                          static_cast<UINT>(layout.size()),
-                                         vertexShaderBlob->GetBufferPointer(),
-                                         vertexShaderBlob->GetBufferSize(),
+                                         vertexShaderBytecode,
+                                         vertexShaderSize,
                                          &m_inputLayout));
 
     // Constant buffer for the three matrices
