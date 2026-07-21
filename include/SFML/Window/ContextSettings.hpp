@@ -48,6 +48,17 @@ struct ContextSettings
         Debug   = 1 << 2  //!< Debug attribute
     };
 
+    ////////////////////////////////////////////////////////////
+    /// \brief Enumeration of the presentation intents
+    ///
+    ////////////////////////////////////////////////////////////
+    enum class Presentation
+    {
+        Auto,       //!< Let the backend choose its preferred presentation path
+        Throughput, //!< Maximize the uncapped frame rate
+        LowLatency  //!< Minimize the delay until frames reach the screen
+    };
+
 
     ////////////////////////////////////////////////////////////
     // Member data
@@ -59,6 +70,7 @@ struct ContextSettings
     unsigned int  minorVersion{1};                    //!< Minor number of the context version to create
     std::uint32_t attributeFlags{Attribute::Default}; //!< The attribute flags to create the context with
     bool          sRgbCapable{};                      //!< Whether the context framebuffer is sRGB capable
+    Presentation  presentation{Presentation::Auto};   //!< How frames should be presented to the screen
 };
 
 } // namespace sf
@@ -114,6 +126,14 @@ struct ContextSettings
 /// <a href="https://developer.apple.com/opengl/capabilities/index.html">
 /// OpenGL Capabilities Tables</a> page. macOS also currently does
 /// not support debug contexts.
+///
+/// presentation expresses how frames should reach the screen,
+/// independent of the graphics backend in use. `Throughput`
+/// favors the highest possible uncapped frame rate, `LowLatency`
+/// favors the shortest delay between rendering a frame and it
+/// becoming visible. Backends map the intent to whatever their
+/// presentation path offers; the OpenGL backend currently has a
+/// single presentation path and ignores this setting.
 ///
 /// Please note that these values are only a hint.
 /// No failure will be reported if one or more of these values

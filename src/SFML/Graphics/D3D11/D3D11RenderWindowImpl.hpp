@@ -32,7 +32,7 @@
 
 #include <SFML/Window/WindowHandle.hpp>
 
-#include <dxgi1_2.h>
+#include <dxgi1_3.h>
 
 
 namespace sf::priv
@@ -129,9 +129,11 @@ private:
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    D3D11GraphicsDevice&           m_device;              //!< Graphics device presenting to the window
-    ComPtr<IDXGISwapChain1>        m_swapChain;           //!< Swap chain presenting to the window
-    ComPtr<ID3D11RenderTargetView> m_renderTargetView;    //!< View of the back buffer
+    D3D11GraphicsDevice&    m_device;                  //!< Graphics device presenting to the window
+    ComPtr<IDXGISwapChain1> m_swapChain;               //!< Swap chain presenting to the window
+    ComPtr<IDXGISwapChain2> m_swapChain2;              //!< 1.3 view of the swap chain, null without a waitable object
+    HANDLE                  m_frameLatencyWaitable{};  //!< Signaled when the presentation queue has room, can be null
+    ComPtr<ID3D11RenderTargetView> m_renderTargetView; //!< View of the back buffer
     ComPtr<ID3D11Texture2D>        m_depthStencilTexture; //!< Depth-stencil buffer, can be null
     ComPtr<ID3D11DepthStencilView> m_depthStencilView;    //!< View of the depth-stencil buffer, can be null
     ContextSettings                m_settings;            //!< Settings actually used by the surface

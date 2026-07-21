@@ -337,6 +337,43 @@ TEST_CASE("[Graphics] Backend rendering parity", runDisplayTests())
         CHECK(image.getPixel({75, 75}) == sf::Color::Black);
     }
 
+    SECTION("Presentation modes")
+    {
+        for (const auto presentation : {sf::ContextSettings::Presentation::Auto,
+                                        sf::ContextSettings::Presentation::Throughput,
+                                        sf::ContextSettings::Presentation::LowLatency})
+        {
+            sf::ContextSettings settings;
+            settings.presentation = presentation;
+
+            sf::RenderWindow window(sf::VideoMode({120, 90}), "Parity", sf::Style::None, sf::State::Windowed, settings);
+
+            // Exercise the paced path, then the uncapped path
+            window.setVerticalSyncEnabled(true);
+            for (int i = 0; i < 3; ++i)
+            {
+                window.clear(sf::Color::Green);
+                window.display();
+            }
+            window.setVerticalSyncEnabled(false);
+            window.clear(sf::Color::Green);
+            window.display();
+
+            window.clear(sf::Color::Green);
+            sf::Texture texture(window.getSize());
+            texture.update(window);
+            CHECK(texture.copyToImage().getPixel({60, 45}) == sf::Color::Green);
+
+#ifdef SFML_TEST_BACKEND_D3D11
+            // The achieved presentation path is reported back
+            if (presentation == sf::ContextSettings::Presentation::Throughput)
+                CHECK(window.getSettings().presentation == sf::ContextSettings::Presentation::Throughput);
+            else
+                CHECK(window.getSettings().presentation == sf::ContextSettings::Presentation::LowLatency);
+#endif
+        }
+    }
+
     SECTION("Texture updated from a render window")
     {
         sf::RenderWindow window(sf::VideoMode({80, 60}), "Parity", sf::Style::None);

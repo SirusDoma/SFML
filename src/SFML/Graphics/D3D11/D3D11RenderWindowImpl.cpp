@@ -70,8 +70,10 @@ D3D11RenderWindowImpl::D3D11RenderWindowImpl(D3D11GraphicsDevice&          devic
         tearingFlag = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
     // Flip-model presentation shares the buffers with the compositor instead of copying them,
-    // but its buffers can be neither multisampled nor sRGB-formatted: multisampled windows
-    // stay on the blit model, sRGB windows render through an sRGB view of the linear buffer.
+    // giving frames a shorter path to the screen, but each present is a costlier transaction
+    // and its buffers can be neither multisampled nor sRGB-formatted: multisampled windows
+    // and windows asking for maximum uncapped throughput use the blit model, sRGB windows
+    // render through an sRGB view of the linear buffer.
     // Newest supported model first, ending with the blit model every system supports.
     struct Attempt
     {
@@ -84,14 +86,17 @@ D3D11RenderWindowImpl::D3D11RenderWindowImpl(D3D11GraphicsDevice&          devic
     // clang-format off
     constexpr std::size_t     blitAttempt = 2;
     const std::array<Attempt, 3> attempts = {{
-        {DXGI_SWAP_EFFECT_FLIP_DISCARD,    3, DXGI_FORMAT_R8G8B8A8_UNORM, tearingFlag}, // Windows 10
-        {DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL, 3, DXGI_FORMAT_R8G8B8A8_UNORM, 0},           // Windows 8
-        {DXGI_SWAP_EFFECT_DISCARD,         1, blitFormat,                 0},           // Windows 7
+        {DXGI_SWAP_EFFECT_FLIP_DISCARD,    3, DXGI_FORMAT_R8G8B8A8_UNORM,
+         tearingFlag | DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT},    // Windows 10
+        {DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL, 3, DXGI_FORMAT_R8G8B8A8_UNORM, 0}, // Windows 8
+        {DXGI_SWAP_EFFECT_DISCARD,         1, blitFormat,                 0}, // Windows 7
     }};
     // clang-format on
 
+    const bool forceBlit = (samples > 1) || (settings.presentation == ContextSettings::Presentation::Throughput);
+
     // Width and height are left zero so the buffers are sized from the window
-    for (std::size_t i = (samples > 1) ? blitAttempt : 0; (i < attempts.size()) && !m_swapChain; ++i)
+    for (std::size_t i = forceBlit ? blitAttempt : 0; (i < attempts.size()) && !m_swapChain; ++i)
     {
         DXGI_SWAP_CHAIN_DESC1 swapChainDesc{};
         swapChainDesc.Format           = attempts[i].format;
@@ -115,6 +120,19 @@ D3D11RenderWindowImpl::D3D11RenderWindowImpl(D3D11GraphicsDevice&          devic
         return;
     }
 
+    // The waitable object paces the application to the presentation queue: waiting on it
+    // before rendering keeps at most one frame queued, minimizing the input-to-display delay
+    if (m_swapChainFlags & DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT)
+    {
+        if (SUCCEEDED(m_swapChain.As(&m_swapChain2)))
+        {
+            m_frameLatencyWaitable = m_swapChain2->GetFrameLatencyWaitableObject();
+
+            // V-sync starts out disabled, allow the queue to run ahead until it is enabled
+            d3dCheck(m_swapChain2->SetMaximumFrameLatency(3));
+        }
+    }
+
     // WindowImplWin32 owns fullscreen switching, keep DXGI away from Alt+Enter
     d3dCheck(factory->MakeWindowAssociation(handle, DXGI_MWA_NO_ALT_ENTER));
 
@@ -131,12 +149,17 @@ D3D11RenderWindowImpl::D3D11RenderWindowImpl(D3D11GraphicsDevice&          devic
     m_settings.minorVersion      = 0;
     m_settings.attributeFlags    = ContextSettings::Default;
     m_settings.sRgbCapable       = m_sRgb;
+    m_settings.presentation      = m_flipModel ? ContextSettings::Presentation::LowLatency
+                                               : ContextSettings::Presentation::Throughput;
 }
 
 
 ////////////////////////////////////////////////////////////
 D3D11RenderWindowImpl::~D3D11RenderWindowImpl()
 {
+    if (m_frameLatencyWaitable)
+        CloseHandle(m_frameLatencyWaitable);
+
     m_device.unbindSurface(m_renderTargetView.Get());
 }
 
@@ -158,6 +181,11 @@ void D3D11RenderWindowImpl::present()
     // Flip-model presentation unbinds the back buffer from the pipeline
     if (m_flipModel && (m_device.getCurrentRenderTargetView() == m_renderTargetView.Get()))
         m_device.bindSurface(m_renderTargetView.Get(), m_depthStencilView.Get());
+
+    // With v-sync the application is paced here, before the next frame samples its input,
+    // instead of inside a Present call issued after the frame was already rendered
+    if (m_frameLatencyWaitable && (m_syncInterval > 0))
+        WaitForSingleObjectEx(m_frameLatencyWaitable, 1000, FALSE);
 }
 
 
@@ -165,6 +193,11 @@ void D3D11RenderWindowImpl::present()
 void D3D11RenderWindowImpl::setVerticalSyncEnabled(bool enabled)
 {
     m_syncInterval = enabled ? 1 : 0;
+
+    // Keep at most one frame queued when v-sync paces the application, let the
+    // queue run ahead when frames are presented as fast as possible
+    if (m_swapChain2)
+        d3dCheck(m_swapChain2->SetMaximumFrameLatency(enabled ? 1 : 3));
 }
 
 
