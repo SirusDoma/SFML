@@ -34,16 +34,30 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <d3dcompiler.h>
 #include <ostream>
 
 #include <cstring>
 
 
+namespace
+{
+// Monotonic stamp handed out to shaders on creation and on every change, values
+// are never reused so a (shader, stamp) pair identifies one exact bindable state
+// even when a destroyed shader's address is reused by a new one
+std::uint64_t nextShaderRevision()
+{
+    static std::atomic<std::uint64_t> revision{0};
+    return ++revision;
+}
+} // namespace
+
+
 namespace sf::priv
 {
 ////////////////////////////////////////////////////////////
-D3D11ShaderImpl::D3D11ShaderImpl(D3D11GraphicsDevice& device) : m_device(device)
+D3D11ShaderImpl::D3D11ShaderImpl(D3D11GraphicsDevice& device) : m_device(device), m_revision(nextShaderRevision())
 {
 }
 
@@ -109,6 +123,8 @@ bool D3D11ShaderImpl::compile(std::string_view vertexShaderCode,
                 device->CreatePixelShader(bytecode->GetBufferPointer(), bytecode->GetBufferSize(), nullptr, &m_pixelShader)))
             return false;
     }
+
+    m_revision = nextShaderRevision();
 
     return true;
 }
@@ -223,6 +239,8 @@ void D3D11ShaderImpl::writeUniform(const std::string& name,
 
         stage->dirty = true;
     }
+
+    m_revision = nextShaderRevision();
 
     if (!found && m_warnedUniforms.emplace(name).second)
         err() << "Uniform \"" << name << "\" not found in shader" << std::endl;
@@ -339,6 +357,7 @@ void D3D11ShaderImpl::setUniform(const std::string& name, const Glsl::Mat4& matr
 void D3D11ShaderImpl::setUniform(const std::string& name, const Texture& texture)
 {
     m_textures[name] = &texture;
+    m_revision       = nextShaderRevision();
 }
 
 
@@ -346,6 +365,7 @@ void D3D11ShaderImpl::setUniform(const std::string& name, const Texture& texture
 void D3D11ShaderImpl::setCurrentTextureUniform(const std::string& name)
 {
     m_currentTextureName = name;
+    m_revision           = nextShaderRevision();
 }
 
 
@@ -408,6 +428,8 @@ void D3D11ShaderImpl::setUniformArray(const std::string& name, const Glsl::Mat3*
 
         stage->dirty = true;
     }
+
+    m_revision = nextShaderRevision();
 
     if (!found && m_warnedUniforms.emplace(name).second)
         err() << "Uniform \"" << name << "\" not found in shader" << std::endl;
@@ -541,6 +563,27 @@ void D3D11ShaderImpl::bind() const
 unsigned int D3D11ShaderImpl::getNativeHandle() const
 {
     return 0;
+}
+
+
+////////////////////////////////////////////////////////////
+std::uint64_t D3D11ShaderImpl::getPipelineStateId() const
+{
+    // Combined with the revision, the texture identities catch changes the
+    // revision cannot see, like mipmaps being generated or filtering being toggled
+    std::uint64_t id = m_revision;
+    for (const auto& texture : m_textures)
+        id = (id * 31) + (getTextureCacheId(*texture.second) * 4) + (texture.second->isSmooth() ? 2u : 0u) +
+             (texture.second->isRepeated() ? 1u : 0u);
+
+    return id;
+}
+
+
+////////////////////////////////////////////////////////////
+bool D3D11ShaderImpl::bindsExternalTextures() const
+{
+    return !m_textures.empty();
 }
 
 } // namespace sf::priv

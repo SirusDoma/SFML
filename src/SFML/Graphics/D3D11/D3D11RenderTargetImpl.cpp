@@ -202,7 +202,7 @@ void D3D11RenderTargetImpl::draw(RenderTarget&       target,
     auto& cache = getCache(target);
 
     setupDraw(target, useVertexCache, states);
-    uploadConstants();
+    setPendingConstants();
 
     const auto* data = useVertexCache ? cache.vertexCache.data() : vertices;
 
@@ -234,6 +234,11 @@ void D3D11RenderTargetImpl::draw(RenderTarget&       target,
     else
     {
         m_device.flushPendingDraws();
+        m_device.applyPendingState();
+
+        // A user shader binds its own pipeline on top of the applied state
+        if (states.shader)
+            applyShader(states.shader);
 
         std::size_t firstVertex = 0;
         if (!m_device.uploadVertices(data, vertexCount, firstVertex))
@@ -271,9 +276,15 @@ void D3D11RenderTargetImpl::draw(RenderTarget&       target,
     auto& cache = getCache(target);
 
     setupDraw(target, false, states);
-    uploadConstants();
+    setPendingConstants();
 
     m_device.flushPendingDraws();
+    m_device.applyPendingState();
+
+    // A user shader binds its own pipeline on top of the applied state
+    if (states.shader)
+        applyShader(states.shader);
+
     m_device.bindVertexBuffer(impl->getBuffer());
 
     drawPrimitives(vertexBuffer.getPrimitiveType(), firstVertex, vertexCount);
@@ -311,21 +322,20 @@ void D3D11RenderTargetImpl::resetStates(RenderTarget& target, std::uint64_t id)
     {
         auto& cache = getCache(target);
 
-        // Bind the built-in pipeline, raw user code may have changed any binding
+        // Raw user code may have changed any binding, the pending
+        // state is fully re-applied when the next draw is submitted
         m_device.flushPendingDraws();
+        m_device.invalidatePipeline();
         m_device.invalidateInputBindings();
-        context->IASetInputLayout(m_device.getInputLayout());
-        context->RSSetState(m_device.getRasterizerState(false));
 
         cache.scissorEnabled = false;
         cache.stencilEnabled = false;
         cache.statesSet      = true;
 
-        // Apply the default SFML states
+        // Reset the pending state to the SFML defaults
         applyBlendMode(target, BlendAlpha, true);
         applyStencilMode(target, StencilMode());
         applyTexture(target, nullptr);
-        applyShader(nullptr);
 
         m_modelView          = identityMatrix;
         cache.useVertexCache = false;
@@ -341,14 +351,10 @@ void D3D11RenderTargetImpl::resetStates(RenderTarget& target, std::uint64_t id)
 ////////////////////////////////////////////////////////////
 void D3D11RenderTargetImpl::applyCurrentView(RenderTarget& target)
 {
-    auto* context = m_device.getContext();
-
-    m_device.flushPendingDraws();
-
     auto&       cache = getCache(target);
     const View& view  = target.getView();
 
-    // Set the viewport, no bottom-up flip: Direct3D window coordinates start at the top-left corner
+    // Set the pending viewport, no bottom-up flip: Direct3D window coordinates start at the top-left corner
     const IntRect viewport = target.getViewport(view);
 
     D3D11_VIEWPORT d3dViewport{};
@@ -358,18 +364,11 @@ void D3D11RenderTargetImpl::applyCurrentView(RenderTarget& target)
     d3dViewport.Height   = static_cast<float>(viewport.size.y);
     d3dViewport.MinDepth = 0.f;
     d3dViewport.MaxDepth = 1.f;
-    context->RSSetViewports(1, &d3dViewport);
+    m_device.setPendingViewport(d3dViewport);
 
-    // Set the scissor rectangle and enable/disable scissor testing
-    if (view.getScissor() == FloatRect({0, 0}, {1, 1}))
-    {
-        if (!cache.enable || cache.scissorEnabled)
-        {
-            context->RSSetState(m_device.getRasterizerState(false));
-            cache.scissorEnabled = false;
-        }
-    }
-    else
+    // Set the pending scissor rectangle and enable/disable scissor testing
+    const bool scissorEnabled = view.getScissor() != FloatRect({0, 0}, {1, 1});
+    if (scissorEnabled)
     {
         const IntRect pixelScissor = target.getScissor(view);
 
@@ -378,14 +377,10 @@ void D3D11RenderTargetImpl::applyCurrentView(RenderTarget& target)
         scissorRect.top    = pixelScissor.position.y;
         scissorRect.right  = pixelScissor.position.x + pixelScissor.size.x;
         scissorRect.bottom = pixelScissor.position.y + pixelScissor.size.y;
-        context->RSSetScissorRects(1, &scissorRect);
-
-        if (!cache.enable || !cache.scissorEnabled)
-        {
-            context->RSSetState(m_device.getRasterizerState(true));
-            cache.scissorEnabled = true;
-        }
+        m_device.setPendingScissorRect(scissorRect);
     }
+    m_device.setPendingRasterizerState(m_device.getRasterizerState(scissorEnabled));
+    cache.scissorEnabled = scissorEnabled;
 
     // Set the projection matrix
     std::memcpy(m_projection.data(), view.getTransform().getMatrix(), sizeof(float) * 16);
@@ -397,11 +392,7 @@ void D3D11RenderTargetImpl::applyCurrentView(RenderTarget& target)
 ////////////////////////////////////////////////////////////
 void D3D11RenderTargetImpl::applyBlendMode(RenderTarget& target, const BlendMode& mode, bool colorWrite)
 {
-    auto* context = m_device.getContext();
-
-    m_device.flushPendingDraws();
-
-    context->OMSetBlendState(m_device.getBlendState(mode, colorWrite), nullptr, 0xFFFFFFFF);
+    m_device.setPendingBlendState(m_device.getBlendState(mode, colorWrite));
 
     getCache(target).lastBlendMode = mode;
     m_lastColorWrite               = colorWrite;
@@ -411,11 +402,7 @@ void D3D11RenderTargetImpl::applyBlendMode(RenderTarget& target, const BlendMode
 ////////////////////////////////////////////////////////////
 void D3D11RenderTargetImpl::applyStencilMode(RenderTarget& target, const StencilMode& mode)
 {
-    auto* context = m_device.getContext();
-
-    m_device.flushPendingDraws();
-
-    context->OMSetDepthStencilState(m_device.getDepthStencilState(mode), mode.stencilReference.value);
+    m_device.setPendingDepthStencilState(m_device.getDepthStencilState(mode), mode.stencilReference.value);
 
     auto& cache           = getCache(target);
     cache.stencilEnabled  = !(mode == StencilMode());
@@ -426,19 +413,14 @@ void D3D11RenderTargetImpl::applyStencilMode(RenderTarget& target, const Stencil
 ////////////////////////////////////////////////////////////
 void D3D11RenderTargetImpl::applyTexture(RenderTarget& target, const Texture* texture, CoordinateType coordinateType)
 {
-    auto* context = m_device.getContext();
-
-    m_device.flushPendingDraws();
-
     auto* impl = texture ? static_cast<D3D11TextureImpl*>(getTextureImpl(*texture)) : nullptr;
 
     ID3D11ShaderResourceView* view = impl ? impl->getShaderResourceView() : m_device.getWhiteTextureView();
-    context->PSSetShaderResources(0, 1, &view);
 
     ID3D11SamplerState* sampler = m_device.getSamplerState(texture && texture->isSmooth(),
                                                            texture && texture->isRepeated(),
                                                            texture && hasTextureMipmap(*texture));
-    context->PSSetSamplers(0, 1, &sampler);
+    m_device.setPendingTexture(view, sampler);
 
     // Setup the texture coordinate matrix, converting pixel coordinates to the range [0 .. 1].
     // Unlike the OpenGL backend there is no padding and no flipped pixels to compensate for.
@@ -449,9 +431,6 @@ void D3D11RenderTargetImpl::applyTexture(RenderTarget& target, const Texture* te
         m_textureMatrix[5] = 1.f / static_cast<float>(texture->getSize().y);
     }
 
-    // Remember the bindings so shaders can resolve their CurrentTexture uniform
-    m_device.setCurrentTextureView(view, sampler);
-
     auto& cache              = getCache(target);
     cache.lastTextureId      = texture ? getTextureCacheId(*texture) : 0;
     cache.lastCoordinateType = coordinateType;
@@ -461,26 +440,20 @@ void D3D11RenderTargetImpl::applyTexture(RenderTarget& target, const Texture* te
 ////////////////////////////////////////////////////////////
 void D3D11RenderTargetImpl::applyShader(const Shader* shader)
 {
-    auto* context = m_device.getContext();
-
-    m_device.flushPendingDraws();
-
     const auto* impl = shader ? static_cast<const D3D11ShaderImpl*>(getShaderImpl(*shader)) : nullptr;
+    if (!impl)
+        return;
 
-    if (impl)
-    {
-        impl->bind();
-    }
-    else
-    {
-        // Restore the built-in pipeline
-        context->VSSetShader(m_device.getDefaultVertexShader(), nullptr, 0);
-        context->GSSetShader(nullptr, nullptr, 0);
-        context->PSSetShader(m_device.getDefaultPixelShader(), nullptr, 0);
+    // The context keeps holding the shader across draws, binding is only needed
+    // when the pending shader is not the one the context holds
+    if (!m_device.takeUserShaderBindPending())
+        return;
 
-        auto* constantBuffer = m_device.getConstantBuffer();
-        context->VSSetConstantBuffers(0, 1, &constantBuffer);
-    }
+    impl->bind();
+
+    // Textures assigned to the shader may have replaced the built-in texture binding
+    if (impl->bindsExternalTextures())
+        m_device.invalidateTextureBinding();
 }
 
 
@@ -529,9 +502,9 @@ void D3D11RenderTargetImpl::setupDraw(RenderTarget& target, bool useVertexCache,
             applyTexture(target, states.texture, states.coordinateType);
     }
 
-    // Apply the shader
-    if (states.shader)
-        applyShader(states.shader);
+    // Set the pending shader program of the draw
+    const auto* shaderImpl = states.shader ? static_cast<const D3D11ShaderImpl*>(getShaderImpl(*states.shader)) : nullptr;
+    m_device.setPendingUserShader(shaderImpl, shaderImpl ? shaderImpl->getPipelineStateId() : 0);
 }
 
 
@@ -576,10 +549,6 @@ void D3D11RenderTargetImpl::drawPrimitives(PrimitiveType type, std::size_t first
 ////////////////////////////////////////////////////////////
 void D3D11RenderTargetImpl::cleanupDraw(RenderTarget& target, const RenderStates& states)
 {
-    // Unbind the shader, if any
-    if (states.shader)
-        applyShader(nullptr);
-
     // If the texture we used to draw belonged to a RenderTexture, then forcibly unbind that texture.
     if (states.texture && isTextureAttachment(*states.texture))
         applyTexture(target, nullptr);
@@ -594,14 +563,14 @@ void D3D11RenderTargetImpl::cleanupDraw(RenderTarget& target, const RenderStates
 
 
 ////////////////////////////////////////////////////////////
-void D3D11RenderTargetImpl::uploadConstants()
+void D3D11RenderTargetImpl::setPendingConstants()
 {
     std::array<float, 48> constants{};
     std::memcpy(constants.data(), m_modelView.data(), sizeof(float) * 16);
     std::memcpy(constants.data() + 16, m_projection.data(), sizeof(float) * 16);
     std::memcpy(constants.data() + 32, m_textureMatrix.data(), sizeof(float) * 16);
 
-    m_device.uploadConstants(constants);
+    m_device.setPendingConstants(constants);
 }
 
 } // namespace sf::priv

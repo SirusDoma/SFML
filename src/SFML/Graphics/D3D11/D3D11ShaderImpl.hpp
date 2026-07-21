@@ -312,6 +312,27 @@ public:
     ////////////////////////////////////////////////////////////
     [[nodiscard]] unsigned int getNativeHandle() const override;
 
+    ////////////////////////////////////////////////////////////
+    /// \brief Get a stamp identifying the bindable state of the shader
+    ///
+    /// The stamp changes whenever a uniform is set or a texture
+    /// used by the shader changes; a shader bound with `bind`
+    /// stays bound correctly for as long as the stamp is unchanged.
+    /// Stamps are never reused across shaders.
+    ///
+    /// \return Stamp of the shader's current bindable state
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] std::uint64_t getPipelineStateId() const;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Tell whether textures were assigned to the shader
+    ///
+    /// \return `true` if binding the shader binds textures other than the draw's texture
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] bool bindsExternalTextures() const;
+
 private:
     ////////////////////////////////////////////////////////////
     /// \brief Uniform bookkeeping of one compiled stage
@@ -387,6 +408,7 @@ private:
     std::unordered_map<std::string, const Texture*> m_textures;           //!< Textures by uniform name
     std::string                                     m_currentTextureName; //!< Uniform resolved to the draw's texture
     std::unordered_set<std::string>                 m_warnedUniforms;     //!< Names already reported as not found
+    std::uint64_t                                   m_revision;           //!< Stamp renewed on every uniform change
 };
 
 } // namespace sf::priv

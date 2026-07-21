@@ -190,7 +190,7 @@ private:
     void applyTexture(RenderTarget& target, const Texture* texture, CoordinateType coordinateType = CoordinateType::Pixels);
 
     ////////////////////////////////////////////////////////////
-    /// \brief Apply a new shader
+    /// \brief Bind a user shader on top of the applied pipeline state
     ///
     ////////////////////////////////////////////////////////////
     void applyShader(const Shader* shader);
@@ -214,10 +214,10 @@ private:
     void cleanupDraw(RenderTarget& target, const RenderStates& states);
 
     ////////////////////////////////////////////////////////////
-    /// \brief Upload the matrices to the constant buffer
+    /// \brief Set the matrices the next draws use
     ///
     ////////////////////////////////////////////////////////////
-    void uploadConstants();
+    void setPendingConstants();
 
     ////////////////////////////////////////////////////////////
     // Member data

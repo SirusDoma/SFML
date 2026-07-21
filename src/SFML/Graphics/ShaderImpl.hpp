@@ -35,6 +35,7 @@
 #include <string_view>
 
 #include <cstddef>
+#include <cstdint>
 
 
 namespace sf
@@ -359,6 +360,19 @@ protected:
     [[nodiscard]] static bool textureHasMipmap(const Texture& texture)
     {
         return texture.m_hasMipmap;
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Get the cache id of a texture used by the shader
+    ///
+    /// \param texture Texture to access
+    ///
+    /// \return Unique number identifying the texture to the shader's cache
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] static std::uint64_t getTextureCacheId(const Texture& texture)
+    {
+        return texture.m_cacheId;
     }
 };
 

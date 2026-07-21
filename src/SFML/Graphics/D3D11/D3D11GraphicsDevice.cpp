@@ -451,21 +451,11 @@ std::uint64_t D3D11GraphicsDevice::getCurrentRenderTargetId() const
 
 
 ////////////////////////////////////////////////////////////
-void D3D11GraphicsDevice::setCurrentTextureView(ID3D11ShaderResourceView* view, ID3D11SamplerState* sampler)
-{
-    const ContextLock lock(*this);
-
-    m_currentTextureView    = view;
-    m_currentTextureSampler = sampler;
-}
-
-
-////////////////////////////////////////////////////////////
 ID3D11ShaderResourceView* D3D11GraphicsDevice::getCurrentTextureView() const
 {
     const ContextLock lock(*this);
 
-    return m_currentTextureView;
+    return m_pending.textureView;
 }
 
 
@@ -474,7 +464,7 @@ ID3D11SamplerState* D3D11GraphicsDevice::getCurrentTextureSampler() const
 {
     const ContextLock lock(*this);
 
-    return m_currentTextureSampler;
+    return m_pending.textureSampler;
 }
 
 
@@ -742,29 +732,215 @@ ID3D11Buffer* D3D11GraphicsDevice::getTriangleFanIndexBuffer(std::size_t vertexC
 
 
 ////////////////////////////////////////////////////////////
-void D3D11GraphicsDevice::uploadConstants(const std::array<float, 48>& constants)
+void D3D11GraphicsDevice::setPendingBlendState(ID3D11BlendState* state)
 {
     const ContextLock lock(*this);
 
-    if (!m_context || !m_constantBuffer)
+    if (m_pending.blendState == state)
         return;
 
-    // Consecutive draws usually share the same matrices, skip the upload when nothing changed
-    if (m_constantsValid && (std::memcmp(m_constants.data(), constants.data(), sizeof(m_constants)) == 0))
-        return;
-
-    // Vertices collected so far belong to the matrices currently on the GPU
     flushPendingDraws();
+    m_pending.blendState = state;
+}
 
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    if (!d3dCheck(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+
+////////////////////////////////////////////////////////////
+void D3D11GraphicsDevice::setPendingDepthStencilState(ID3D11DepthStencilState* state, UINT reference)
+{
+    const ContextLock lock(*this);
+
+    if ((m_pending.depthStencilState == state) && (m_pending.stencilReference == reference))
         return;
 
-    std::memcpy(mapped.pData, constants.data(), sizeof(m_constants));
-    m_context->Unmap(m_constantBuffer.Get(), 0);
+    flushPendingDraws();
+    m_pending.depthStencilState = state;
+    m_pending.stencilReference  = reference;
+}
 
-    m_constants      = constants;
-    m_constantsValid = true;
+
+////////////////////////////////////////////////////////////
+void D3D11GraphicsDevice::setPendingTexture(ID3D11ShaderResourceView* view, ID3D11SamplerState* sampler)
+{
+    const ContextLock lock(*this);
+
+    if ((m_pending.textureView == view) && (m_pending.textureSampler == sampler))
+        return;
+
+    flushPendingDraws();
+    m_pending.textureView    = view;
+    m_pending.textureSampler = sampler;
+}
+
+
+////////////////////////////////////////////////////////////
+void D3D11GraphicsDevice::setPendingUserShader(const void* shader, std::uint64_t stateId)
+{
+    // Set on every draw, and draws only happen on the rendering thread, which
+    // always observes its own writes, so the unchanged case can skip the lock
+    if ((m_pending.userShader == shader) && (m_pending.userShaderState == stateId))
+        return;
+
+    const ContextLock lock(*this);
+
+    flushPendingDraws();
+    m_pending.userShader      = shader;
+    m_pending.userShaderState = stateId;
+}
+
+
+////////////////////////////////////////////////////////////
+void D3D11GraphicsDevice::setPendingRasterizerState(ID3D11RasterizerState* state)
+{
+    const ContextLock lock(*this);
+
+    if (m_pending.rasterizerState == state)
+        return;
+
+    flushPendingDraws();
+    m_pending.rasterizerState = state;
+}
+
+
+////////////////////////////////////////////////////////////
+void D3D11GraphicsDevice::setPendingViewport(const D3D11_VIEWPORT& viewport)
+{
+    const ContextLock lock(*this);
+
+    if (std::memcmp(&m_pending.viewport, &viewport, sizeof(viewport)) == 0)
+        return;
+
+    flushPendingDraws();
+    m_pending.viewport = viewport;
+}
+
+
+////////////////////////////////////////////////////////////
+void D3D11GraphicsDevice::setPendingScissorRect(const D3D11_RECT& rect)
+{
+    const ContextLock lock(*this);
+
+    if (std::memcmp(&m_pending.scissorRect, &rect, sizeof(rect)) == 0)
+        return;
+
+    flushPendingDraws();
+    m_pending.scissorRect = rect;
+}
+
+
+////////////////////////////////////////////////////////////
+void D3D11GraphicsDevice::setPendingConstants(const std::array<float, 48>& constants)
+{
+    const ContextLock lock(*this);
+
+    if (std::memcmp(m_pending.constants.data(), constants.data(), sizeof(constants)) == 0)
+        return;
+
+    flushPendingDraws();
+    m_pending.constants = constants;
+}
+
+
+////////////////////////////////////////////////////////////
+void D3D11GraphicsDevice::applyPendingState()
+{
+    const ContextLock lock(*this);
+
+    if (!m_context)
+        return;
+
+    // Restore the built-in pipeline when the context holds a different program; a
+    // pending user shader is bound on top of it afterwards by the draw that set it
+    if (!m_appliedProgramValid || (m_applied.userShader != m_pending.userShader) ||
+        (m_applied.userShaderState != m_pending.userShaderState))
+    {
+        // The rebind is skipped when the context holds the plain built-in pipeline,
+        // a user shader only adds its own stages on top of it
+        if (!m_appliedProgramValid || (m_applied.userShader && (m_applied.userShader != m_pending.userShader)))
+        {
+            m_context->VSSetShader(m_defaultVertexShader.Get(), nullptr, 0);
+            m_context->GSSetShader(nullptr, nullptr, 0);
+            m_context->PSSetShader(m_defaultPixelShader.Get(), nullptr, 0);
+            m_context->IASetInputLayout(m_inputLayout.Get());
+
+            auto* constantBuffer = m_constantBuffer.Get();
+            m_context->VSSetConstantBuffers(0, 1, &constantBuffer);
+        }
+
+        m_userShaderBindPending = (m_pending.userShader != nullptr);
+        m_appliedProgramValid   = true;
+    }
+
+    if (!m_appliedValid || (m_applied.blendState != m_pending.blendState))
+        m_context->OMSetBlendState(m_pending.blendState, nullptr, 0xFFFFFFFF);
+
+    if (!m_appliedValid || (m_applied.depthStencilState != m_pending.depthStencilState) ||
+        (m_applied.stencilReference != m_pending.stencilReference))
+        m_context->OMSetDepthStencilState(m_pending.depthStencilState, m_pending.stencilReference);
+
+    if (!m_appliedValid || !m_appliedTextureValid || (m_applied.textureView != m_pending.textureView))
+        m_context->PSSetShaderResources(0, 1, &m_pending.textureView);
+
+    if (!m_appliedValid || !m_appliedTextureValid || (m_applied.textureSampler != m_pending.textureSampler))
+        m_context->PSSetSamplers(0, 1, &m_pending.textureSampler);
+
+    if (!m_appliedValid || (m_applied.rasterizerState != m_pending.rasterizerState))
+        m_context->RSSetState(m_pending.rasterizerState);
+
+    if (!m_appliedValid || (std::memcmp(&m_applied.viewport, &m_pending.viewport, sizeof(m_pending.viewport)) != 0))
+        m_context->RSSetViewports(1, &m_pending.viewport);
+
+    if (!m_appliedValid ||
+        (std::memcmp(&m_applied.scissorRect, &m_pending.scissorRect, sizeof(m_pending.scissorRect)) != 0))
+        m_context->RSSetScissorRects(1, &m_pending.scissorRect);
+
+    if (m_constantBuffer &&
+        (!m_appliedValid ||
+         (std::memcmp(m_applied.constants.data(), m_pending.constants.data(), sizeof(m_pending.constants)) != 0)))
+    {
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        if (d3dCheck(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+        {
+            std::memcpy(mapped.pData, m_pending.constants.data(), sizeof(m_pending.constants));
+            m_context->Unmap(m_constantBuffer.Get(), 0);
+        }
+    }
+
+    m_applied             = m_pending;
+    m_appliedValid        = true;
+    m_appliedTextureValid = true;
+}
+
+
+////////////////////////////////////////////////////////////
+bool D3D11GraphicsDevice::takeUserShaderBindPending()
+{
+    const ContextLock lock(*this);
+
+    const bool pending      = m_userShaderBindPending;
+    m_userShaderBindPending = false;
+
+    return pending;
+}
+
+
+////////////////////////////////////////////////////////////
+void D3D11GraphicsDevice::invalidatePipeline()
+{
+    const ContextLock lock(*this);
+
+    m_appliedValid          = false;
+    m_appliedTextureValid   = false;
+    m_appliedProgramValid   = false;
+    m_userShaderBindPending = false;
+}
+
+
+////////////////////////////////////////////////////////////
+void D3D11GraphicsDevice::invalidateTextureBinding()
+{
+    const ContextLock lock(*this);
+
+    m_appliedTextureValid = false;
 }
 
 
@@ -857,6 +1033,7 @@ void D3D11GraphicsDevice::flushPendingDraws()
     std::size_t firstVertex = 0;
     if (m_context && uploadVertices(m_pendingVertices.data(), m_pendingVertices.size(), firstVertex))
     {
+        applyPendingState();
         bindVertexBuffer(getStreamVertexBuffer());
         bindTopology(m_pendingTopology);
         m_context->Draw(static_cast<UINT>(m_pendingVertices.size()), static_cast<UINT>(firstVertex));

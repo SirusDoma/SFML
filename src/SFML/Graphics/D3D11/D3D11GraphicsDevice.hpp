@@ -292,30 +292,21 @@ public:
     [[nodiscard]] std::uint64_t getCurrentRenderTargetId() const;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Remember the texture view and sampler bound for the current draw
+    /// \brief Get the pending texture view of the current draw
     ///
-    /// Shaders use these to resolve their CurrentTexture uniform
+    /// Shaders use this to resolve their CurrentTexture uniform
     /// and any texture they declare without assigning one, which
     /// samples the draw's texture like an unset GLSL sampler does.
     ///
-    /// \param view    View of the texture bound to the built-in texture slot
-    /// \param sampler Sampler bound alongside the texture
-    ///
-    ////////////////////////////////////////////////////////////
-    void setCurrentTextureView(ID3D11ShaderResourceView* view, ID3D11SamplerState* sampler);
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Get the texture view bound for the current draw
-    ///
-    /// \return View of the texture bound to the built-in texture slot
+    /// \return View of the texture pending for the built-in texture slot
     ///
     ////////////////////////////////////////////////////////////
     [[nodiscard]] ID3D11ShaderResourceView* getCurrentTextureView() const;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Get the sampler bound for the current draw
+    /// \brief Get the pending sampler of the current draw
     ///
-    /// \return Sampler bound alongside the current texture
+    /// \return Sampler pending alongside the current texture
     ///
     ////////////////////////////////////////////////////////////
     [[nodiscard]] ID3D11SamplerState* getCurrentTextureSampler() const;
@@ -432,15 +423,123 @@ public:
     [[nodiscard]] ID3D11Buffer* getTriangleFanIndexBuffer(std::size_t vertexCount, std::size_t& indexCount);
 
     ////////////////////////////////////////////////////////////
-    /// \brief Upload the matrices to the constant buffer if they changed
+    /// \brief Set the blend state the next draws use
     ///
-    /// Consecutive draws usually share the same matrices, the
-    /// upload is skipped when the contents are already on the GPU.
+    /// Setting a different state submits the collected draws,
+    /// they belong to the previously pending state.
+    ///
+    /// \param state Blend state to set
+    ///
+    ////////////////////////////////////////////////////////////
+    void setPendingBlendState(ID3D11BlendState* state);
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Set the depth-stencil state the next draws use
+    ///
+    /// \param state     Depth-stencil state to set
+    /// \param reference Stencil reference value to set
+    ///
+    ////////////////////////////////////////////////////////////
+    void setPendingDepthStencilState(ID3D11DepthStencilState* state, UINT reference);
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Set the texture and sampler the next draws use
+    ///
+    /// \param view    View of the texture for the built-in texture slot
+    /// \param sampler Sampler used alongside the texture
+    ///
+    ////////////////////////////////////////////////////////////
+    void setPendingTexture(ID3D11ShaderResourceView* view, ID3D11SamplerState* sampler);
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Set the rasterizer state the next draws use
+    ///
+    /// \param state Rasterizer state to set
+    ///
+    ////////////////////////////////////////////////////////////
+    void setPendingRasterizerState(ID3D11RasterizerState* state);
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Set the viewport the next draws use
+    ///
+    /// \param viewport Viewport to set
+    ///
+    ////////////////////////////////////////////////////////////
+    void setPendingViewport(const D3D11_VIEWPORT& viewport);
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Set the scissor rectangle the next draws use
+    ///
+    /// \param rect Scissor rectangle to set
+    ///
+    ////////////////////////////////////////////////////////////
+    void setPendingScissorRect(const D3D11_RECT& rect);
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Set the matrices the next draws use
     ///
     /// \param constants Model-view, projection and texture matrix, 16 floats each
     ///
     ////////////////////////////////////////////////////////////
-    void uploadConstants(const std::array<float, 48>& constants);
+    void setPendingConstants(const std::array<float, 48>& constants);
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Set the user shader the next draws are drawn with
+    ///
+    /// Pending draws are flushed first when the shader or its
+    /// state stamp changes, they belong to the previously pending
+    /// state. `applyPendingState` only restores the built-in
+    /// pipeline; the user shader itself is bound on top by the
+    /// caller when `takeUserShaderBindPending` says so.
+    ///
+    /// \param shader  Identity of the user shader, a null pointer for the built-in pipeline
+    /// \param stateId Stamp of the shader's bindable state, from `D3D11ShaderImpl::getPipelineStateId`
+    ///
+    ////////////////////////////////////////////////////////////
+    void setPendingUserShader(const void* shader, std::uint64_t stateId);
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Set the context to the pending pipeline state
+    ///
+    /// Only the parts that differ from what the context is known
+    /// to hold are set. Must be called before issuing a draw call
+    /// outside of `flushPendingDraws`.
+    ///
+    ////////////////////////////////////////////////////////////
+    void applyPendingState();
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Tell whether the pending user shader still has to be bound
+    ///
+    /// Set by `applyPendingState` when the pending user shader
+    /// is not the one the context holds, and reset when read. The
+    /// draw that set it as pending binds it when this is `true`.
+    ///
+    /// \return `true` if the caller has to bind the pending user shader
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] bool takeUserShaderBindPending();
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Forget what the context is known to hold
+    ///
+    /// Must be called when the pipeline may have been changed
+    /// outside of `applyPendingState`, like by raw Direct3D user
+    /// code. The pending state is fully re-applied on the next
+    /// draw.
+    ///
+    ////////////////////////////////////////////////////////////
+    void invalidatePipeline();
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Forget which texture the built-in texture slot holds
+    ///
+    /// Must be called when a bound user shader replaced the
+    /// texture at the built-in slot with one of its own, the
+    /// pending texture is re-applied on the next draw.
+    ///
+    ////////////////////////////////////////////////////////////
+    void invalidateTextureBinding();
 
     ////////////////////////////////////////////////////////////
     /// \brief Bind a vertex buffer to the input assembler unless it is already bound
@@ -514,11 +613,9 @@ private:
     D3D_FEATURE_LEVEL            m_featureLevel{}; //!< Feature level the device was created with
     mutable std::recursive_mutex m_mutex;          //!< Serializes access to the immediate context and caches
 
-    ID3D11RenderTargetView*   m_currentRenderTargetView{}; //!< Color view of the bound surface, not owned
-    ID3D11DepthStencilView*   m_currentDepthStencilView{}; //!< Depth-stencil view of the bound surface, not owned
-    std::uint64_t             m_currentRenderTargetId{};   //!< Id of the render target active on the device
-    ID3D11ShaderResourceView* m_currentTextureView{};      //!< Texture view bound for the current draw, not owned
-    ID3D11SamplerState*       m_currentTextureSampler{};   //!< Sampler bound for the current draw, not owned
+    ID3D11RenderTargetView* m_currentRenderTargetView{}; //!< Color view of the bound surface, not owned
+    ID3D11DepthStencilView* m_currentDepthStencilView{}; //!< Depth-stencil view of the bound surface, not owned
+    std::uint64_t           m_currentRenderTargetId{};   //!< Id of the render target active on the device
 
     ComPtr<ID3D11VertexShader> m_defaultVertexShader; //!< Built-in vertex shader
     ComPtr<ID3D11PixelShader>  m_defaultPixelShader;  //!< Built-in pixel shader
@@ -538,8 +635,34 @@ private:
     ID3D11Buffer* m_currentIndexBuffer{};  //!< Index buffer bound to the input assembler, not owned
     D3D11_PRIMITIVE_TOPOLOGY m_currentTopology{D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED}; //!< Topology set on the input assembler
 
-    std::array<float, 48> m_constants{};      //!< CPU copy of the constant buffer contents
-    bool                  m_constantsValid{}; //!< Whether the CPU copy matches the GPU buffer
+    ////////////////////////////////////////////////////////////
+    /// \brief Pipeline state the pending draws use
+    ///
+    /// Nothing in it owns what it points to, the pointed-to state
+    /// objects live in the device's caches.
+    ///
+    ////////////////////////////////////////////////////////////
+    struct PipelineState
+    {
+        ID3D11BlendState*         blendState{};        //!< Blend state of the draws
+        ID3D11DepthStencilState*  depthStencilState{}; //!< Depth-stencil state of the draws
+        UINT                      stencilReference{};  //!< Stencil reference value of the draws
+        ID3D11ShaderResourceView* textureView{};       //!< Texture the draws sample
+        ID3D11SamplerState*       textureSampler{};    //!< Sampler the draws sample with
+        ID3D11RasterizerState*    rasterizerState{};   //!< Rasterizer state of the draws
+        D3D11_VIEWPORT            viewport{};          //!< Viewport of the draws
+        D3D11_RECT                scissorRect{};       //!< Scissor rectangle of the draws
+        std::array<float, 48>     constants{};         //!< Model-view, projection and texture matrix of the draws
+        const void*               userShader{}; //!< User shader bound on top of the built-in pipeline, null for none
+        std::uint64_t             userShaderState{}; //!< Stamp of the user shader's bindable state when it was set
+    };
+
+    PipelineState m_pending;                 //!< State the next draws use
+    PipelineState m_applied;                 //!< State the context is known to hold
+    bool          m_appliedValid{};          //!< Whether the context is known to hold m_applied
+    bool          m_appliedTextureValid{};   //!< Whether the context is known to hold the applied texture and sampler
+    bool          m_appliedProgramValid{};   //!< Whether the context is known to hold the applied shader program
+    bool          m_userShaderBindPending{}; //!< Whether the pending user shader still has to be bound
 
     std::vector<Vertex> m_pendingVertices; //!< Vertices of merged draws awaiting submission
     D3D11_PRIMITIVE_TOPOLOGY m_pendingTopology{D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST}; //!< Topology of the pending vertices
