@@ -28,7 +28,12 @@
 #include <SFML/Graphics/D3D11/D3D11GraphicsDevice.hpp>
 #include <SFML/Graphics/D3D11/D3D11RenderWindowImpl.hpp>
 
+#include <SFML/System/Err.hpp>
+
 #include <algorithm>
+#include <array>
+#include <dxgi1_5.h>
+#include <ostream>
 
 
 namespace sf::priv
@@ -52,29 +57,71 @@ D3D11RenderWindowImpl::D3D11RenderWindowImpl(D3D11GraphicsDevice&          devic
         !d3dCheck(dxgiDevice->GetAdapter(&adapter)) || !d3dCheck(adapter->GetParent(IID_PPV_ARGS(&factory))))
         return;
 
-    const DXGI_FORMAT  format  = settings.sRgbCapable ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
-    const unsigned int samples = m_device.clampAntiAliasingLevel(std::max(settings.antiAliasingLevel, 1u), format);
+    const DXGI_FORMAT  blitFormat = settings.sRgbCapable ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
+    const unsigned int samples = m_device.clampAntiAliasingLevel(std::max(settings.antiAliasingLevel, 1u), blitFormat);
 
-    // The blit presentation model is used because it supports multisampled and sRGB back buffers directly.
-    // Width and height are left zero so the buffers are sized from the window.
-    DXGI_SWAP_CHAIN_DESC1 swapChainDesc{};
-    swapChainDesc.Format           = format;
-    swapChainDesc.SampleDesc.Count = samples;
-    swapChainDesc.BufferUsage      = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    swapChainDesc.BufferCount      = 1;
-    swapChainDesc.SwapEffect       = DXGI_SWAP_EFFECT_DISCARD;
-    swapChainDesc.Scaling          = DXGI_SCALING_STRETCH;
+    // Tearing support is required to present uncapped with the flip model
+    UINT                  tearingFlag = 0;
+    ComPtr<IDXGIFactory5> factory5;
+    BOOL                  allowTearing = FALSE;
+    if (SUCCEEDED(factory.As(&factory5)) &&
+        SUCCEEDED(factory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing))) &&
+        allowTearing)
+        tearingFlag = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
-    if (!d3dCheck(factory->CreateSwapChainForHwnd(d3dDevice, handle, &swapChainDesc, nullptr, nullptr, &m_swapChain)))
+    // Flip-model presentation shares the buffers with the compositor instead of copying them,
+    // but its buffers can be neither multisampled nor sRGB-formatted: multisampled windows
+    // stay on the blit model, sRGB windows render through an sRGB view of the linear buffer.
+    // Newest supported model first, ending with the blit model every system supports.
+    struct Attempt
+    {
+        DXGI_SWAP_EFFECT swapEffect;
+        UINT             bufferCount;
+        DXGI_FORMAT      format;
+        UINT             flags;
+    };
+
+    // clang-format off
+    constexpr std::size_t     blitAttempt = 2;
+    const std::array<Attempt, 3> attempts = {{
+        {DXGI_SWAP_EFFECT_FLIP_DISCARD,    2, DXGI_FORMAT_R8G8B8A8_UNORM, tearingFlag}, // Windows 10
+        {DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL, 2, DXGI_FORMAT_R8G8B8A8_UNORM, 0},           // Windows 8
+        {DXGI_SWAP_EFFECT_DISCARD,         1, blitFormat,                 0},           // Windows 7
+    }};
+    // clang-format on
+
+    // Width and height are left zero so the buffers are sized from the window
+    for (std::size_t i = (samples > 1) ? blitAttempt : 0; (i < attempts.size()) && !m_swapChain; ++i)
+    {
+        DXGI_SWAP_CHAIN_DESC1 swapChainDesc{};
+        swapChainDesc.Format           = attempts[i].format;
+        swapChainDesc.SampleDesc.Count = (i == blitAttempt) ? samples : 1;
+        swapChainDesc.BufferUsage      = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        swapChainDesc.BufferCount      = attempts[i].bufferCount;
+        swapChainDesc.SwapEffect       = attempts[i].swapEffect;
+        swapChainDesc.Scaling          = DXGI_SCALING_STRETCH;
+        swapChainDesc.Flags            = attempts[i].flags;
+
+        if (SUCCEEDED(factory->CreateSwapChainForHwnd(d3dDevice, handle, &swapChainDesc, nullptr, nullptr, &m_swapChain)))
+        {
+            m_flipModel      = attempts[i].swapEffect != DXGI_SWAP_EFFECT_DISCARD;
+            m_swapChainFlags = attempts[i].flags;
+        }
+    }
+
+    if (!m_swapChain)
+    {
+        err() << "Failed to create the swap chain" << std::endl;
         return;
+    }
 
     // WindowImplWin32 owns fullscreen switching, keep DXGI away from Alt+Enter
     d3dCheck(factory->MakeWindowAssociation(handle, DXGI_MWA_NO_ALT_ENTER));
 
+    m_sRgb = settings.sRgbCapable;
+
     if (!createViews(settings.depthBits > 0 || settings.stencilBits > 0))
         return;
-
-    m_sRgb = (format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
 
     // Report what was actually created
     m_settings.depthBits         = m_depthStencilView ? 24 : 0;
@@ -104,7 +151,13 @@ void D3D11RenderWindowImpl::present()
 
     m_device.flushPendingDraws();
 
-    d3dCheck(m_swapChain->Present(m_syncInterval, 0));
+    const bool tearing = m_flipModel && (m_syncInterval == 0) &&
+                         ((m_swapChainFlags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) != 0);
+    d3dCheck(m_swapChain->Present(m_syncInterval, tearing ? DXGI_PRESENT_ALLOW_TEARING : 0));
+
+    // Flip-model presentation unbinds the back buffer from the pipeline
+    if (m_flipModel && (m_device.getCurrentRenderTargetView() == m_renderTargetView.Get()))
+        m_device.bindSurface(m_renderTargetView.Get(), m_depthStencilView.Get());
 }
 
 
@@ -133,7 +186,7 @@ void D3D11RenderWindowImpl::resize(Vector2u size)
     m_depthStencilTexture.Reset();
     m_depthStencilView.Reset();
 
-    if (!d3dCheck(m_swapChain->ResizeBuffers(0, size.x, size.y, DXGI_FORMAT_UNKNOWN, 0)))
+    if (!d3dCheck(m_swapChain->ResizeBuffers(0, size.x, size.y, DXGI_FORMAT_UNKNOWN, m_swapChainFlags)))
         return;
 
     if (createViews(hadDepthStencil) && wasCurrent)
@@ -174,8 +227,20 @@ bool D3D11RenderWindowImpl::createViews(bool depthStencil)
         return false;
 
     ComPtr<ID3D11Texture2D> backBuffer;
-    if (!d3dCheck(m_swapChain->GetBuffer(0, IID_PPV_ARGS(&backBuffer))) ||
-        !d3dCheck(device->CreateRenderTargetView(backBuffer.Get(), nullptr, &m_renderTargetView)))
+    if (!d3dCheck(m_swapChain->GetBuffer(0, IID_PPV_ARGS(&backBuffer))))
+        return false;
+
+    // Flip-model buffers cannot use an sRGB format, but they allow an sRGB view over the linear buffer
+    D3D11_RENDER_TARGET_VIEW_DESC  viewDesc{};
+    D3D11_RENDER_TARGET_VIEW_DESC* viewDescPtr = nullptr;
+    if (m_flipModel && m_sRgb)
+    {
+        viewDesc.Format        = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        viewDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+        viewDescPtr            = &viewDesc;
+    }
+
+    if (!d3dCheck(device->CreateRenderTargetView(backBuffer.Get(), viewDescPtr, &m_renderTargetView)))
         return false;
 
     if (depthStencil)

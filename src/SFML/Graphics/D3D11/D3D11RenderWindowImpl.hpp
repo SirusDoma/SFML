@@ -137,6 +137,8 @@ private:
     ContextSettings                m_settings;            //!< Settings actually used by the surface
     UINT                           m_syncInterval{};      //!< Present sync interval, 1 when v-sync is enabled
     bool                           m_sRgb{};              //!< Whether the back buffer uses sRGB encoding
+    bool                           m_flipModel{};         //!< Whether the swap chain presents through the flip model
+    UINT                           m_swapChainFlags{};    //!< Flags the swap chain was created with
 };
 
 } // namespace sf::priv
