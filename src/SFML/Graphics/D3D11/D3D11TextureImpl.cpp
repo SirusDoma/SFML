@@ -110,6 +110,9 @@ void D3D11TextureImpl::update(const std::uint8_t* pixels, Vector2u size, Vector2
 
     const D3D11GraphicsDevice::ContextLock lock(m_device);
 
+    // Draws collected so far must sample the texture before it changes
+    m_device.flushPendingDraws();
+
     const D3D11_BOX box{dest.x, dest.y, 0, dest.x + size.x, dest.y + size.y, 1};
     context->UpdateSubresource(m_texture.Get(), 0, &box, pixels, size.x * 4, 0);
 }
@@ -134,6 +137,8 @@ TextureImpl::UpdateResult D3D11TextureImpl::update(
 
     const D3D11GraphicsDevice::ContextLock lock(m_device);
 
+    m_device.flushPendingDraws();
+
     const D3D11_BOX box{0, 0, 0, sourceSize.x, sourceSize.y, 1};
     context->CopySubresourceRegion(m_texture.Get(), 0, dest.x, dest.y, 0, d3dSource.m_texture.Get(), 0, &box);
 
@@ -149,6 +154,8 @@ void D3D11TextureImpl::update(const Image& image, const IntRect& rectangle, [[ma
         return;
 
     const D3D11GraphicsDevice::ContextLock lock(m_device);
+
+    m_device.flushPendingDraws();
 
     const auto imageSize = Vector2i(image.getSize());
 
@@ -190,6 +197,8 @@ bool D3D11TextureImpl::update(const Window& window, Vector2u dest, [[maybe_unuse
         return false;
 
     const D3D11GraphicsDevice::ContextLock lock(m_device);
+
+    m_device.flushPendingDraws();
 
     auto* renderTargetView = m_device.getCurrentRenderTargetView();
     if (!renderTargetView)
@@ -257,6 +266,9 @@ Image D3D11TextureImpl::copyToImage(Vector2u size, [[maybe_unused]] Vector2u act
         {
             const D3D11GraphicsDevice::ContextLock lock(m_device);
 
+            // Draws collected so far may render into this texture
+            m_device.flushPendingDraws();
+
             context->CopyResource(stagingTexture.Get(), m_texture.Get());
 
             D3D11_MAPPED_SUBRESOURCE mapped{};
@@ -305,6 +317,8 @@ bool D3D11TextureImpl::generateMipmap([[maybe_unused]] bool smooth)
         return false;
 
     const D3D11GraphicsDevice::ContextLock lock(m_device);
+
+    m_device.flushPendingDraws();
 
     context->GenerateMips(m_shaderResourceView.Get());
 

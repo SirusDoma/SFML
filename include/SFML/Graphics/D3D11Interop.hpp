@@ -148,6 +148,24 @@ namespace D3D11
 [[nodiscard]] SFML_GRAPHICS_API ID3D11Buffer* getBuffer(const VertexBuffer& vertexBuffer);
 
 ////////////////////////////////////////////////////////////
+/// \brief Submit any draws SFML has not sent to the device yet
+///
+/// SFML merges consecutive compatible draws into a single draw
+/// call and submits them when needed. Raw Direct3D calls bypass
+/// this mechanism, so call this function before issuing your own
+/// rendering to guarantee that everything drawn through SFML so
+/// far is rendered first:
+/// \code
+/// window.draw(background);
+/// sf::D3D11::flush();
+/// // Direct3D code here...
+/// sf::D3D11::resetStates(window);
+/// \endcode
+///
+////////////////////////////////////////////////////////////
+SFML_GRAPHICS_API void flush();
+
+////////////////////////////////////////////////////////////
 /// \brief Reset the internal states so that the target is ready for drawing
 ///
 /// Direct3D has no state stack to save and restore: set the

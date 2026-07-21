@@ -419,6 +419,9 @@ void D3D11GraphicsDevice::bindSurface(ID3D11RenderTargetView* renderTargetView, 
 {
     const ContextLock lock(*this);
 
+    if (renderTargetView != m_currentRenderTargetView)
+        flushPendingDraws();
+
     m_currentRenderTargetView = renderTargetView;
     m_currentDepthStencilView = depthStencilView;
 
@@ -434,6 +437,8 @@ void D3D11GraphicsDevice::unbindSurface(ID3D11RenderTargetView* renderTargetView
 
     if (m_currentRenderTargetView != renderTargetView)
         return;
+
+    flushPendingDraws();
 
     m_currentRenderTargetView = nullptr;
     m_currentDepthStencilView = nullptr;
@@ -782,6 +787,9 @@ void D3D11GraphicsDevice::uploadConstants(const std::array<float, 48>& constants
     if (m_constantsValid && (std::memcmp(m_constants.data(), constants.data(), sizeof(m_constants)) == 0))
         return;
 
+    // Vertices collected so far belong to the matrices currently on the GPU
+    flushPendingDraws();
+
     D3D11_MAPPED_SUBRESOURCE mapped{};
     if (!d3dCheck(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
         return;
@@ -846,6 +854,43 @@ void D3D11GraphicsDevice::invalidateInputBindings()
     m_currentVertexBuffer = nullptr;
     m_currentIndexBuffer  = nullptr;
     m_currentTopology     = D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
+}
+
+
+////////////////////////////////////////////////////////////
+void D3D11GraphicsDevice::appendPendingVertices(const Vertex* vertices, std::size_t vertexCount, D3D11_PRIMITIVE_TOPOLOGY topology)
+{
+    const ContextLock lock(*this);
+
+    // Bound the staging memory and the latency of a single merged draw
+    constexpr std::size_t maxPendingVertices = 16384;
+
+    if (!m_pendingVertices.empty() &&
+        ((topology != m_pendingTopology) || (m_pendingVertices.size() + vertexCount > maxPendingVertices)))
+        flushPendingDraws();
+
+    m_pendingTopology = topology;
+    m_pendingVertices.insert(m_pendingVertices.end(), vertices, vertices + vertexCount);
+}
+
+
+////////////////////////////////////////////////////////////
+void D3D11GraphicsDevice::flushPendingDraws()
+{
+    const ContextLock lock(*this);
+
+    if (m_pendingVertices.empty())
+        return;
+
+    std::size_t firstVertex = 0;
+    if (m_context && uploadVertices(m_pendingVertices.data(), m_pendingVertices.size(), firstVertex))
+    {
+        bindVertexBuffer(getStreamVertexBuffer());
+        bindTopology(m_pendingTopology);
+        m_context->Draw(static_cast<UINT>(m_pendingVertices.size()), static_cast<UINT>(firstVertex));
+    }
+
+    m_pendingVertices.clear();
 }
 
 

@@ -102,6 +102,8 @@ void D3D11RenderWindowImpl::present()
 
     const D3D11GraphicsDevice::ContextLock lock(m_device);
 
+    m_device.flushPendingDraws();
+
     d3dCheck(m_swapChain->Present(m_syncInterval, 0));
 }
 

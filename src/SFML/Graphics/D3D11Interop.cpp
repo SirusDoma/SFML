@@ -158,6 +158,16 @@ ID3D11Buffer* getBuffer([[maybe_unused]] const VertexBuffer& vertexBuffer)
 
 
 ////////////////////////////////////////////////////////////
+void flush()
+{
+#ifdef SFML_ENABLE_D3D11
+    if (auto* device = getD3d11Device())
+        device->flushPendingDraws();
+#endif
+}
+
+
+////////////////////////////////////////////////////////////
 void resetStates(RenderTarget& target)
 {
     if (auto* impl = ImplAccess::getImpl(target))

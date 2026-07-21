@@ -154,6 +154,9 @@ void D3D11RenderTextureImpl::updateTexture(TextureImpl& texture)
 
     const D3D11GraphicsDevice::ContextLock lock(m_device);
 
+    // Draws collected so far must land in the multisampled target before the resolve
+    m_device.flushPendingDraws();
+
     context->ResolveSubresource(targetTexture, 0, m_multisampleTexture.Get(), 0, m_format);
 }
 

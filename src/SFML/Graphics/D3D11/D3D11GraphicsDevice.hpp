@@ -31,6 +31,7 @@
 #include <SFML/Graphics/D3D11/D3D11Utils.hpp>
 #include <SFML/Graphics/GraphicsDevice.hpp>
 #include <SFML/Graphics/StencilMode.hpp>
+#include <SFML/Graphics/Vertex.hpp>
 
 #include <SFML/System/Vector2.hpp>
 
@@ -39,6 +40,7 @@
 #include <memory>
 #include <mutex>
 #include <unordered_map>
+#include <vector>
 
 #include <cstddef>
 #include <cstdint>
@@ -472,6 +474,29 @@ public:
     ////////////////////////////////////////////////////////////
     void invalidateInputBindings();
 
+    ////////////////////////////////////////////////////////////
+    /// \brief Collect vertices of a draw to submit them together with following compatible draws
+    ///
+    /// Consecutive draws whose pipeline state is identical are
+    /// merged into a single draw call. Anything that changes what
+    /// the pending vertices would render must call
+    /// `flushPendingDraws` first.
+    ///
+    /// \param vertices    Vertices to collect, in list order
+    /// \param vertexCount Number of vertices to collect
+    /// \param topology    List topology the vertices belong to
+    ///
+    ////////////////////////////////////////////////////////////
+    void appendPendingVertices(const Vertex* vertices, std::size_t vertexCount, D3D11_PRIMITIVE_TOPOLOGY topology);
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Submit the collected vertices in a single draw call
+    ///
+    /// Does nothing when no vertices are pending.
+    ///
+    ////////////////////////////////////////////////////////////
+    void flushPendingDraws();
+
 private:
     ////////////////////////////////////////////////////////////
     /// \brief Create the built-in pipeline objects
@@ -514,6 +539,9 @@ private:
 
     std::array<float, 48> m_constants{};      //!< CPU copy of the constant buffer contents
     bool                  m_constantsValid{}; //!< Whether the CPU copy matches the GPU buffer
+
+    std::vector<Vertex> m_pendingVertices; //!< Vertices of merged draws awaiting submission
+    D3D11_PRIMITIVE_TOPOLOGY m_pendingTopology{D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST}; //!< Topology of the pending vertices
 
     std::unordered_map<std::uint32_t, ComPtr<ID3D11BlendState>> m_blendStates; //!< Cache of blend state objects, keyed by packed blend mode
     std::unordered_map<std::uint32_t, ComPtr<ID3D11DepthStencilState>> m_depthStencilStates; //!< Cache of depth-stencil state objects, keyed by packed stencil mode

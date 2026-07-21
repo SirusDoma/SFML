@@ -110,6 +110,9 @@ void D3D11RenderTargetImpl::clear(RenderTarget& target, Color color)
     if (!context || !renderTargetView)
         return;
 
+    // Pending draws may have stencil side effects that must land before the clear
+    m_device.flushPendingDraws();
+
     // Apply the view so the projection and scissor stay in sync
     const auto& cache = getCache(target);
     if (!cache.enable || cache.viewChanged)
@@ -157,6 +160,8 @@ void D3D11RenderTargetImpl::clearStencil(RenderTarget& target, StencilValue sten
     if (!context)
         return;
 
+    m_device.flushPendingDraws();
+
     const auto& cache = getCache(target);
     if (!cache.enable || cache.viewChanged)
         applyCurrentView(target);
@@ -197,18 +202,48 @@ void D3D11RenderTargetImpl::draw(RenderTarget&       target,
     auto& cache = getCache(target);
 
     setupDraw(target, useVertexCache, states);
+    uploadConstants();
 
-    // Upload the vertices to the streaming vertex buffer
-    const void* data = useVertexCache ? static_cast<const void*>(cache.vertexCache.data())
-                                      : static_cast<const void*>(vertices);
+    const auto* data = useVertexCache ? cache.vertexCache.data() : vertices;
 
-    std::size_t firstVertex = 0;
-    if (!m_device.uploadVertices(data, vertexCount, firstVertex))
-        return;
+    // Merge list draws and single quads into the pending draw while the pipeline state
+    // is unchanged, one draw call then covers all of them. Everything else, like fans,
+    // strips, large draws and draws with a user shader, is submitted directly.
+    constexpr std::size_t maxMergedVertices = 1024;
 
-    m_device.bindVertexBuffer(m_device.getStreamVertexBuffer());
+    const bool isList = (type == PrimitiveType::Triangles) || (type == PrimitiveType::Lines) ||
+                        (type == PrimitiveType::Points);
+    const bool isQuad = (type == PrimitiveType::TriangleStrip) && (vertexCount == 4);
 
-    drawPrimitives(type, firstVertex, vertexCount);
+    if (!states.shader && (isList || isQuad) && (vertexCount <= maxMergedVertices))
+    {
+        if (isQuad)
+        {
+            const std::array<Vertex, 6> quad = {data[0], data[1], data[2], data[2], data[1], data[3]};
+            m_device.appendPendingVertices(quad.data(), quad.size(), D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        }
+        else
+        {
+            m_device.appendPendingVertices(data,
+                                           vertexCount,
+                                           (type == PrimitiveType::Triangles) ? D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
+                                           : (type == PrimitiveType::Lines)   ? D3D11_PRIMITIVE_TOPOLOGY_LINELIST
+                                                                              : D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
+        }
+    }
+    else
+    {
+        m_device.flushPendingDraws();
+
+        std::size_t firstVertex = 0;
+        if (!m_device.uploadVertices(data, vertexCount, firstVertex))
+            return;
+
+        m_device.bindVertexBuffer(m_device.getStreamVertexBuffer());
+
+        drawPrimitives(type, firstVertex, vertexCount);
+    }
+
     cleanupDraw(target, states);
 
     // Update the cache
@@ -236,7 +271,9 @@ void D3D11RenderTargetImpl::draw(RenderTarget&       target,
     auto& cache = getCache(target);
 
     setupDraw(target, false, states);
+    uploadConstants();
 
+    m_device.flushPendingDraws();
     m_device.bindVertexBuffer(impl->getBuffer());
 
     drawPrimitives(vertexBuffer.getPrimitiveType(), firstVertex, vertexCount);
@@ -275,6 +312,7 @@ void D3D11RenderTargetImpl::resetStates(RenderTarget& target, std::uint64_t id)
         auto& cache = getCache(target);
 
         // Bind the built-in pipeline, raw user code may have changed any binding
+        m_device.flushPendingDraws();
         m_device.invalidateInputBindings();
         context->IASetInputLayout(m_device.getInputLayout());
         context->RSSetState(m_device.getRasterizerState(false));
@@ -304,6 +342,8 @@ void D3D11RenderTargetImpl::resetStates(RenderTarget& target, std::uint64_t id)
 void D3D11RenderTargetImpl::applyCurrentView(RenderTarget& target)
 {
     auto* context = m_device.getContext();
+
+    m_device.flushPendingDraws();
 
     auto&       cache = getCache(target);
     const View& view  = target.getView();
@@ -359,6 +399,8 @@ void D3D11RenderTargetImpl::applyBlendMode(RenderTarget& target, const BlendMode
 {
     auto* context = m_device.getContext();
 
+    m_device.flushPendingDraws();
+
     context->OMSetBlendState(m_device.getBlendState(mode, colorWrite), nullptr, 0xFFFFFFFF);
 
     getCache(target).lastBlendMode = mode;
@@ -370,6 +412,8 @@ void D3D11RenderTargetImpl::applyBlendMode(RenderTarget& target, const BlendMode
 void D3D11RenderTargetImpl::applyStencilMode(RenderTarget& target, const StencilMode& mode)
 {
     auto* context = m_device.getContext();
+
+    m_device.flushPendingDraws();
 
     context->OMSetDepthStencilState(m_device.getDepthStencilState(mode), mode.stencilReference.value);
 
@@ -383,6 +427,8 @@ void D3D11RenderTargetImpl::applyStencilMode(RenderTarget& target, const Stencil
 void D3D11RenderTargetImpl::applyTexture(RenderTarget& target, const Texture* texture, CoordinateType coordinateType)
 {
     auto* context = m_device.getContext();
+
+    m_device.flushPendingDraws();
 
     auto* impl = texture ? static_cast<D3D11TextureImpl*>(getTextureImpl(*texture)) : nullptr;
 
@@ -416,6 +462,8 @@ void D3D11RenderTargetImpl::applyTexture(RenderTarget& target, const Texture* te
 void D3D11RenderTargetImpl::applyShader(const Shader* shader)
 {
     auto* context = m_device.getContext();
+
+    m_device.flushPendingDraws();
 
     const auto* impl = shader ? static_cast<const D3D11ShaderImpl*>(getShaderImpl(*shader)) : nullptr;
 
@@ -491,8 +539,6 @@ void D3D11RenderTargetImpl::setupDraw(RenderTarget& target, bool useVertexCache,
 void D3D11RenderTargetImpl::drawPrimitives(PrimitiveType type, std::size_t firstVertex, std::size_t vertexCount)
 {
     auto* context = m_device.getContext();
-
-    uploadConstants();
 
     // Direct3D has no triangle-fan topology, draw fans as an indexed triangle list
     if (type == PrimitiveType::TriangleFan)

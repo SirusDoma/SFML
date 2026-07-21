@@ -424,7 +424,9 @@ int main()
                 modelViewProjection        = multiply(modelViewProjection, rotation(seconds * 30.f, 1));
                 modelViewProjection        = multiply(modelViewProjection, rotation(seconds * 90.f, 2));
 
-                // Draw the cube with raw Direct3D calls, then hand the pipeline back to SFML
+                // Make sure the SFML draws above reach the device before our own rendering,
+                // then draw the cube with raw Direct3D calls and hand the pipeline back to SFML
+                sf::D3D11::flush();
                 rawCube.draw(sf::D3D11::getContext(),
                              modelViewProjection,
                              sf::D3D11::getShaderResourceView(texture),
