@@ -187,7 +187,7 @@ Texture::Texture(Texture&& right) noexcept :
     m_sRgb(std::exchange(right.m_sRgb, false)),
     m_isRepeated(std::exchange(right.m_isRepeated, false)),
     m_pixelsFlipped(std::exchange(right.m_pixelsFlipped, false)),
-    m_fboAttachment(std::exchange(right.m_fboAttachment, false)),
+    m_renderTextureAttachment(std::exchange(right.m_renderTextureAttachment, false)),
     m_hasMipmap(std::exchange(right.m_hasMipmap, false)),
     m_cacheId(std::exchange(right.m_cacheId, 0))
 {
@@ -203,17 +203,17 @@ Texture& Texture::operator=(Texture&& right) noexcept
     }
 
     // Move old to new, destroying our previous backend texture in the process.
-    m_device        = right.m_device;
-    m_impl          = std::move(right.m_impl);
-    m_size          = std::exchange(right.m_size, {});
-    m_actualSize    = std::exchange(right.m_actualSize, {});
-    m_isSmooth      = std::exchange(right.m_isSmooth, false);
-    m_sRgb          = std::exchange(right.m_sRgb, false);
-    m_isRepeated    = std::exchange(right.m_isRepeated, false);
-    m_pixelsFlipped = std::exchange(right.m_pixelsFlipped, false);
-    m_fboAttachment = std::exchange(right.m_fboAttachment, false);
-    m_hasMipmap     = std::exchange(right.m_hasMipmap, false);
-    m_cacheId       = std::exchange(right.m_cacheId, 0);
+    m_device                  = right.m_device;
+    m_impl                    = std::move(right.m_impl);
+    m_size                    = std::exchange(right.m_size, {});
+    m_actualSize              = std::exchange(right.m_actualSize, {});
+    m_isSmooth                = std::exchange(right.m_isSmooth, false);
+    m_sRgb                    = std::exchange(right.m_sRgb, false);
+    m_isRepeated              = std::exchange(right.m_isRepeated, false);
+    m_pixelsFlipped           = std::exchange(right.m_pixelsFlipped, false);
+    m_renderTextureAttachment = std::exchange(right.m_renderTextureAttachment, false);
+    m_hasMipmap               = std::exchange(right.m_hasMipmap, false);
+    m_cacheId                 = std::exchange(right.m_cacheId, 0);
     return *this;
 }
 
@@ -245,13 +245,13 @@ bool Texture::resize(Vector2u size, bool sRgb)
     }
 
     // All the validity checks passed, we can store the new texture settings
-    m_size          = size;
-    m_actualSize    = actualSize;
-    m_sRgb          = sRgb;
-    m_pixelsFlipped = false;
-    m_fboAttachment = false;
-    m_cacheId       = TextureImpl::getUniqueId();
-    m_hasMipmap     = false;
+    m_size                    = size;
+    m_actualSize              = actualSize;
+    m_sRgb                    = sRgb;
+    m_pixelsFlipped           = false;
+    m_renderTextureAttachment = false;
+    m_cacheId                 = TextureImpl::getUniqueId();
+    m_hasMipmap               = false;
 
     return true;
 }
@@ -575,7 +575,7 @@ void Texture::swap(Texture& right) noexcept
     std::swap(m_sRgb, right.m_sRgb);
     std::swap(m_isRepeated, right.m_isRepeated);
     std::swap(m_pixelsFlipped, right.m_pixelsFlipped);
-    std::swap(m_fboAttachment, right.m_fboAttachment);
+    std::swap(m_renderTextureAttachment, right.m_renderTextureAttachment);
     std::swap(m_hasMipmap, right.m_hasMipmap);
     std::swap(m_cacheId, right.m_cacheId);
 }

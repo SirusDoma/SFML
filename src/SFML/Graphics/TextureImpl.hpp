@@ -28,6 +28,7 @@
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Graphics/Rect.hpp>
+#include <SFML/Graphics/Texture.hpp>
 
 #include <SFML/System/Vector2.hpp>
 
@@ -209,6 +210,46 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     [[nodiscard]] virtual unsigned int getNativeHandle() const = 0;
+
+protected:
+    ////////////////////////////////////////////////////////////
+    /// \brief Get the implementation of a texture
+    ///
+    /// \param texture Texture to access
+    ///
+    /// \return The texture's implementation, can be a null pointer
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] static TextureImpl* getImpl(const Texture& texture)
+    {
+        return texture.m_impl.get();
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Get the size a texture actually allocated on the backend
+    ///
+    /// \param texture Texture to access
+    ///
+    /// \return The allocated size, can be greater than the public size because of padding
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] static Vector2u getActualSize(const Texture& texture)
+    {
+        return texture.m_actualSize;
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Check whether the pixels of a texture are flipped vertically
+    ///
+    /// \param texture Texture to access
+    ///
+    /// \return `true` if the pixels are flipped
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] static bool arePixelsFlipped(const Texture& texture)
+    {
+        return texture.m_pixelsFlipped;
+    }
 };
 
 } // namespace priv

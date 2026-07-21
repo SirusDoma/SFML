@@ -209,8 +209,8 @@ void GlRenderTargetImpl::activate(RenderTarget& target, std::uint64_t id, bool a
         {
             contextRenderTargetMap[contextId] = id;
 
-            cache.glStatesSet = false;
-            cache.enable      = false;
+            cache.statesSet = false;
+            cache.enable    = false;
         }
         else if (it->second != id)
         {
@@ -292,7 +292,7 @@ void GlRenderTargetImpl::draw(RenderTarget&       target,
 
     // Check if texture coordinates array is needed, and update client state accordingly
     const bool enableTexCoordsArray = (states.texture || states.shader);
-    if (!cache.enable || (enableTexCoordsArray != cache.texCoordsArrayEnabled))
+    if (!cache.enable || (enableTexCoordsArray != m_texCoordsArrayEnabled))
     {
         if (enableTexCoordsArray)
             glCheck(glEnableClientState(GL_TEXTURE_COORD_ARRAY));
@@ -315,7 +315,7 @@ void GlRenderTargetImpl::draw(RenderTarget&       target,
         if (enableTexCoordsArray)
             glCheck(glTexCoordPointer(2, GL_FLOAT, sizeof(Vertex), data + 12));
     }
-    else if (enableTexCoordsArray && !cache.texCoordsArrayEnabled)
+    else if (enableTexCoordsArray && !m_texCoordsArrayEnabled)
     {
         // If we enter this block, we are already using our internal vertex cache
         const auto* data = reinterpret_cast<const std::byte*>(cache.vertexCache.data());
@@ -327,8 +327,8 @@ void GlRenderTargetImpl::draw(RenderTarget&       target,
     cleanupDraw(target, states);
 
     // Update the cache
-    cache.useVertexCache        = useVertexCache;
-    cache.texCoordsArrayEnabled = enableTexCoordsArray;
+    cache.useVertexCache    = useVertexCache;
+    m_texCoordsArrayEnabled = enableTexCoordsArray;
 }
 
 
@@ -350,7 +350,7 @@ void GlRenderTargetImpl::draw(RenderTarget&       target,
     GlVertexBufferImpl::bind(&vertexBuffer);
 
     // Always enable texture coordinates
-    if (!cache.enable || !cache.texCoordsArrayEnabled)
+    if (!cache.enable || !m_texCoordsArrayEnabled)
         glCheck(glEnableClientState(GL_TEXTURE_COORD_ARRAY));
 
     glCheck(glVertexPointer(2, GL_FLOAT, sizeof(Vertex), reinterpret_cast<const void*>(0)));
@@ -365,8 +365,8 @@ void GlRenderTargetImpl::draw(RenderTarget&       target,
     cleanupDraw(target, states);
 
     // Update the cache
-    cache.useVertexCache        = false;
-    cache.texCoordsArrayEnabled = true;
+    cache.useVertexCache    = false;
+    m_texCoordsArrayEnabled = true;
 }
 
 
@@ -459,7 +459,7 @@ void GlRenderTargetImpl::resetStates(RenderTarget& target, std::uint64_t id)
         glCheck(glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE));
         cache.scissorEnabled = false;
         cache.stencilEnabled = false;
-        cache.glStatesSet    = true;
+        cache.statesSet      = true;
 
         // Apply the default SFML states
         applyBlendMode(target, BlendAlpha);
@@ -471,7 +471,7 @@ void GlRenderTargetImpl::resetStates(RenderTarget& target, std::uint64_t id)
         if (vertexBufferAvailable)
             glCheck(GlVertexBufferImpl::bind(nullptr));
 
-        cache.texCoordsArrayEnabled = true;
+        m_texCoordsArrayEnabled = true;
 
         cache.useVertexCache = false;
 
@@ -663,7 +663,7 @@ void GlRenderTargetImpl::setupDraw(RenderTarget& target, bool useVertexCache, co
 #endif
 
     // First set the persistent OpenGL states if it's the very first call
-    if (!cache.glStatesSet)
+    if (!cache.statesSet)
         resetStates(target, getId(target));
 
     if (useVertexCache)
@@ -694,7 +694,7 @@ void GlRenderTargetImpl::setupDraw(RenderTarget& target, bool useVertexCache, co
         glCheck(glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE));
 
     // Apply the texture
-    if (!cache.enable || (states.texture && isTextureFboAttachment(*states.texture)))
+    if (!cache.enable || (states.texture && isTextureAttachment(*states.texture)))
     {
         // If the texture is an FBO attachment, always rebind it
         // in order to inform the OpenGL driver that we want changes
@@ -739,7 +739,7 @@ void GlRenderTargetImpl::cleanupDraw(RenderTarget& target, const RenderStates& s
 
     // If the texture we used to draw belonged to a RenderTexture, then forcibly unbind that texture.
     // This prevents a bug where some drivers do not clear RenderTextures properly.
-    if (states.texture && isTextureFboAttachment(*states.texture))
+    if (states.texture && isTextureAttachment(*states.texture))
         applyTexture(target, nullptr);
 
     // Mask the color buffer back on if necessary

@@ -80,8 +80,8 @@ void D3D11RenderTargetImpl::activate(RenderTarget& target, std::uint64_t id, boo
         {
             m_device.setCurrentRenderTargetId(id);
 
-            cache.glStatesSet = false;
-            cache.enable      = false;
+            cache.statesSet = false;
+            cache.enable    = false;
         }
         else if (currentId != id)
         {
@@ -319,7 +319,7 @@ void D3D11RenderTargetImpl::resetStates(RenderTarget& target, std::uint64_t id)
 
         cache.scissorEnabled = false;
         cache.stencilEnabled = false;
-        cache.glStatesSet    = true;
+        cache.statesSet      = true;
 
         // Apply the default SFML states
         applyBlendMode(target, BlendAlpha, true);
@@ -490,7 +490,7 @@ void D3D11RenderTargetImpl::setupDraw(RenderTarget& target, bool useVertexCache,
     auto& cache = getCache(target);
 
     // First bind the pipeline if it's the very first call
-    if (!cache.glStatesSet)
+    if (!cache.statesSet)
         resetStates(target, getId(target));
 
     if (useVertexCache)
@@ -518,7 +518,7 @@ void D3D11RenderTargetImpl::setupDraw(RenderTarget& target, bool useVertexCache,
         applyStencilMode(target, states.stencilMode);
 
     // Apply the texture
-    if (!cache.enable || (states.texture && isTextureFboAttachment(*states.texture)))
+    if (!cache.enable || (states.texture && isTextureAttachment(*states.texture)))
     {
         applyTexture(target, states.texture, states.coordinateType);
     }
@@ -581,7 +581,7 @@ void D3D11RenderTargetImpl::cleanupDraw(RenderTarget& target, const RenderStates
         applyShader(nullptr);
 
     // If the texture we used to draw belonged to a RenderTexture, then forcibly unbind that texture.
-    if (states.texture && isTextureFboAttachment(*states.texture))
+    if (states.texture && isTextureAttachment(*states.texture))
         applyTexture(target, nullptr);
 
     // Turn the color writes back on if necessary

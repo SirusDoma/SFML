@@ -28,6 +28,8 @@
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Graphics/Glsl.hpp>
+#include <SFML/Graphics/Shader.hpp>
+#include <SFML/Graphics/Texture.hpp>
 
 #include <string>
 #include <string_view>
@@ -318,6 +320,46 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     [[nodiscard]] virtual unsigned int getNativeHandle() const = 0;
+
+protected:
+    ////////////////////////////////////////////////////////////
+    /// \brief Get the implementation of a shader
+    ///
+    /// \param shader Shader to access
+    ///
+    /// \return The shader's implementation, can be a null pointer
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] static ShaderImpl* getImpl(const Shader& shader)
+    {
+        return shader.m_impl.get();
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Get the implementation of a texture used by the shader
+    ///
+    /// \param texture Texture to access
+    ///
+    /// \return The texture's implementation, can be a null pointer
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] static TextureImpl* getTextureImpl(const Texture& texture)
+    {
+        return texture.m_impl.get();
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Check whether a texture used by the shader has a mipmap
+    ///
+    /// \param texture Texture to access
+    ///
+    /// \return `true` if the texture currently has a mipmap
+    ///
+    ////////////////////////////////////////////////////////////
+    [[nodiscard]] static bool textureHasMipmap(const Texture& texture)
+    {
+        return texture.m_hasMipmap;
+    }
 };
 
 } // namespace priv

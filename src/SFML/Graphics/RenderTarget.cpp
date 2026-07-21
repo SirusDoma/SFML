@@ -290,8 +290,8 @@ void RenderTarget::initialize()
     m_defaultView = View(FloatRect({0, 0}, Vector2f(getSize())));
     m_view        = m_defaultView;
 
-    // Set GL states only on first draw, so that we don't pollute user's states
-    m_cache.glStatesSet = false;
+    // Set up the render states only on first draw, so that we don't pollute user's states
+    m_cache.statesSet = false;
 
     // Generate a unique ID for this RenderTarget to track
     // whether it is active within a specific context

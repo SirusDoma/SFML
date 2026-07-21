@@ -241,16 +241,16 @@ protected:
     }
 
     ////////////////////////////////////////////////////////////
-    /// \brief Check whether a texture is owned by a framebuffer object
+    /// \brief Check whether a texture is the attachment of a render texture
     ///
     /// \param texture Texture to access
     ///
-    /// \return `true` if the texture is a framebuffer object attachment
+    /// \return `true` if the texture is a render texture attachment
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] static bool isTextureFboAttachment(const Texture& texture)
+    [[nodiscard]] static bool isTextureAttachment(const Texture& texture)
     {
-        return texture.m_fboAttachment;
+        return texture.m_renderTextureAttachment;
     }
 
     ////////////////////////////////////////////////////////////

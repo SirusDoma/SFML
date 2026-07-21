@@ -434,10 +434,10 @@ void D3D11ShaderImpl::bindTextures(const Stage& stage, StageKind kind) const
         const auto it = (name != m_currentTextureName) ? m_textures.find(name) : m_textures.end();
         if (it != m_textures.end())
         {
-            if (const auto* impl = static_cast<const D3D11TextureImpl*>(it->second->m_impl.get()))
+            if (const auto* impl = static_cast<const D3D11TextureImpl*>(getTextureImpl(*it->second)))
                 view = impl->getShaderResourceView();
 
-            sampler = m_device.getSamplerState(it->second->isSmooth(), it->second->isRepeated(), it->second->m_hasMipmap);
+            sampler = m_device.getSamplerState(it->second->isSmooth(), it->second->isRepeated(), textureHasMipmap(*it->second));
         }
         else
         {

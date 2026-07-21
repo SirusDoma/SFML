@@ -567,7 +567,7 @@ void GlShaderImpl::bind(const Shader* shader)
         return;
     }
 
-    const auto* impl = shader ? static_cast<const GlShaderImpl*>(shader->m_impl.get()) : nullptr;
+    const auto* impl = shader ? static_cast<const GlShaderImpl*>(getImpl(*shader)) : nullptr;
 
     if (impl && impl->m_shaderProgram)
     {

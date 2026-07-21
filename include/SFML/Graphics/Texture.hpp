@@ -49,10 +49,9 @@ class Image;
 
 namespace priv
 {
-class D3D11ShaderImpl;
-class GlTextureImpl;
 class GraphicsDevice;
 class RenderTargetImpl;
+class ShaderImpl;
 class TextureImpl;
 } // namespace priv
 
@@ -690,9 +689,9 @@ private:
     friend class Text;
     friend class RenderTexture;
     friend class RenderTarget;
-    friend class priv::D3D11ShaderImpl;
-    friend class priv::GlTextureImpl;
     friend class priv::RenderTargetImpl;
+    friend class priv::ShaderImpl;
+    friend class priv::TextureImpl;
 
     ////////////////////////////////////////////////////////////
     /// \brief Invalidate the mipmap if one exists
@@ -715,9 +714,9 @@ private:
     bool          m_sRgb{};          //!< Should the texture source be converted from sRGB?
     bool          m_isRepeated{};    //!< Is the texture in repeat mode?
     mutable bool  m_pixelsFlipped{}; //!< To work around the inconsistency in Y orientation
-    bool          m_fboAttachment{}; //!< Is this texture owned by a framebuffer object?
-    bool          m_hasMipmap{};     //!< Has the mipmap been generated?
-    std::uint64_t m_cacheId;         //!< Unique number that identifies the texture to the render target's cache
+    bool          m_renderTextureAttachment{}; //!< Is this texture the attachment of a render texture?
+    bool          m_hasMipmap{};               //!< Has the mipmap been generated?
+    std::uint64_t m_cacheId; //!< Unique number that identifies the texture to the render target's cache
 };
 
 ////////////////////////////////////////////////////////////

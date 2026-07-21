@@ -578,7 +578,7 @@ void GlTextureImpl::bind(const Texture* texture, CoordinateType coordinateType)
 {
     const TransientContextLock lock;
 
-    const auto* impl = texture ? static_cast<const GlTextureImpl*>(texture->m_impl.get()) : nullptr;
+    const auto* impl = texture ? static_cast<const GlTextureImpl*>(getImpl(*texture)) : nullptr;
 
     if (impl && impl->m_texture)
     {
@@ -589,9 +589,13 @@ void GlTextureImpl::bind(const Texture* texture, CoordinateType coordinateType)
         // Bind the texture
         glCheck(glBindTexture(GL_TEXTURE_2D, impl->m_texture));
 
+        const Vector2u size          = texture->getSize();
+        const Vector2u actualSize    = getActualSize(*texture);
+        const bool     pixelsFlipped = arePixelsFlipped(*texture);
+
         // Check if we need to define a special texture matrix
-        if ((coordinateType == CoordinateType::Pixels) || texture->m_pixelsFlipped ||
-            ((coordinateType == CoordinateType::Normalized) && (texture->m_size != texture->m_actualSize)))
+        if ((coordinateType == CoordinateType::Pixels) || pixelsFlipped ||
+            ((coordinateType == CoordinateType::Normalized) && (size != actualSize)))
         {
             // clang-format off
             std::array matrix = {1.f, 0.f, 0.f, 0.f,
@@ -604,23 +608,23 @@ void GlTextureImpl::bind(const Texture* texture, CoordinateType coordinateType)
             // setup scale factors that convert the range [0 .. size] to [0 .. 1]
             if (coordinateType == CoordinateType::Pixels)
             {
-                matrix[0] = 1.f / static_cast<float>(texture->m_actualSize.x);
-                matrix[5] = 1.f / static_cast<float>(texture->m_actualSize.y);
+                matrix[0] = 1.f / static_cast<float>(actualSize.x);
+                matrix[5] = 1.f / static_cast<float>(actualSize.y);
             }
 
             // If normalized coordinates are used when NPOT textures aren't supported,
             // then we need to setup scale factors to make the coordinates relative to the actual POT size
-            if ((coordinateType == CoordinateType::Normalized) && (texture->m_size != texture->m_actualSize))
+            if ((coordinateType == CoordinateType::Normalized) && (size != actualSize))
             {
-                matrix[0] = static_cast<float>(texture->m_size.x) / static_cast<float>(texture->m_actualSize.x);
-                matrix[5] = static_cast<float>(texture->m_size.y) / static_cast<float>(texture->m_actualSize.y);
+                matrix[0] = static_cast<float>(size.x) / static_cast<float>(actualSize.x);
+                matrix[5] = static_cast<float>(size.y) / static_cast<float>(actualSize.y);
             }
 
             // If pixels are flipped we must invert the Y axis
-            if (texture->m_pixelsFlipped)
+            if (pixelsFlipped)
             {
                 matrix[5]  = -matrix[5];
-                matrix[13] = static_cast<float>(texture->m_size.y) / static_cast<float>(texture->m_actualSize.y);
+                matrix[13] = static_cast<float>(size.y) / static_cast<float>(actualSize.y);
             }
 
             // Load the matrix

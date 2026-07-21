@@ -82,7 +82,7 @@ bool RenderTexture::resize(Vector2u size, const ContextSettings& settings)
 
     // Mark the texture as being a framebuffer object attachment
     if (m_impl->isTextureAttachment())
-        m_texture.m_fboAttachment = true;
+        m_texture.m_renderTextureAttachment = true;
 
     // Initialize the render texture
     // We pass the actual size of our texture since OpenGL ES requires that all attachments have identical sizes

@@ -46,7 +46,6 @@ class Texture;
 
 namespace priv
 {
-class GlShaderImpl;
 class GraphicsDevice;
 class RenderTargetImpl;
 class ShaderImpl;
@@ -828,8 +827,8 @@ public:
     [[nodiscard]] static bool isGeometryAvailable();
 
 private:
-    friend class priv::GlShaderImpl;
     friend class priv::RenderTargetImpl;
+    friend class priv::ShaderImpl;
 
     ////////////////////////////////////////////////////////////
     /// \brief Compile the shader(s) and create the program
