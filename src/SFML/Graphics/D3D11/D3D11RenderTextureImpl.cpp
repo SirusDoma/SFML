@@ -110,9 +110,11 @@ bool D3D11RenderTextureImpl::create(Vector2u size, TextureImpl& texture, const C
             return false;
     }
 
-    m_size   = size;
-    m_format = targetDesc.Format;
-    m_sRgb   = (targetDesc.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+    m_size            = size;
+    m_format          = targetDesc.Format;
+    m_sRgb            = (targetDesc.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+    m_targetTexture   = &d3dTexture;
+    m_attachedTexture = targetTexture;
 
     return true;
 }
@@ -124,6 +126,15 @@ bool D3D11RenderTextureImpl::activate(bool active)
     // Deactivation is a no-op, all surfaces share the single device
     if (!active)
         return true;
+
+    // generateMipmap re-creates the attached texture, re-attach when it changed
+    if (!m_multisampleTexture && m_targetTexture && (m_targetTexture->getTexture() != m_attachedTexture))
+    {
+        m_renderTargetView.Reset();
+        if (ID3D11Device* device = m_device.getDevice())
+            d3dCheck(device->CreateRenderTargetView(m_targetTexture->getTexture(), nullptr, &m_renderTargetView));
+        m_attachedTexture = m_targetTexture->getTexture();
+    }
 
     m_device.bindSurface(m_renderTargetView.Get(), m_depthStencilView.Get());
 

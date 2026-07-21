@@ -625,7 +625,7 @@ ID3D11SamplerState* D3D11GraphicsDevice::getSamplerState(bool smooth, bool repea
         }
         else
         {
-            // Textures allocate a full mip chain up front, a zero MaxLOD hides the ungenerated levels
+            // A zero MaxLOD hides the extra levels of textures whose mipmap was invalidated
             desc.Filter = smooth ? D3D11_FILTER_MIN_MAG_MIP_LINEAR : D3D11_FILTER_MIN_MAG_MIP_POINT;
             desc.MaxLOD = 0.f;
         }

@@ -34,6 +34,7 @@
 
 #include <algorithm>
 #include <ostream>
+#include <utility>
 #include <vector>
 
 #include <cassert>
@@ -74,19 +75,17 @@ bool D3D11TextureImpl::create(Vector2u size, bool& sRgb, [[maybe_unused]] bool s
     m_texture.Reset();
     m_shaderResourceView.Reset();
 
-    // The render-target bind flag allows render textures to attach and GPU copies to resolve into the texture.
-    // A full mip chain is allocated up front so generateMipmap can work, samplers with a zero MaxLOD
-    // keep the unused levels invisible as long as no mipmap was generated.
+    // The render-target bind flag allows render textures to attach and GPU copies to resolve into
+    // the texture. A single mip level is allocated, generateMipmap allocates the full chain on demand.
     D3D11_TEXTURE2D_DESC desc{};
     desc.Width            = size.x;
     desc.Height           = size.y;
-    desc.MipLevels        = 0;
+    desc.MipLevels        = 1;
     desc.ArraySize        = 1;
     desc.Format           = sRgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
     desc.SampleDesc.Count = 1;
     desc.Usage            = D3D11_USAGE_DEFAULT;
     desc.BindFlags        = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
-    desc.MiscFlags        = D3D11_RESOURCE_MISC_GENERATE_MIPS;
 
     if (!d3dCheck(device->CreateTexture2D(&desc, nullptr, &m_texture)))
         return false;
@@ -312,13 +311,45 @@ void D3D11TextureImpl::setRepeated([[maybe_unused]] bool repeated)
 ////////////////////////////////////////////////////////////
 bool D3D11TextureImpl::generateMipmap([[maybe_unused]] bool smooth)
 {
+    ID3D11Device*        device  = m_device.getDevice();
     ID3D11DeviceContext* context = m_device.getContext();
-    if (!m_texture || !m_shaderResourceView || !context)
+    if (!m_texture || !m_shaderResourceView || !device || !context)
         return false;
 
     const D3D11GraphicsDevice::ContextLock lock(m_device);
 
     m_device.flushPendingDraws();
+
+    // Textures are created with a single mip level, the first mipmap generation
+    // re-creates the texture with the full chain and carries the base level over
+    D3D11_TEXTURE2D_DESC desc{};
+    m_texture->GetDesc(&desc);
+    if (!(desc.MiscFlags & D3D11_RESOURCE_MISC_GENERATE_MIPS))
+    {
+        desc.MipLevels = 0;
+        desc.MiscFlags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
+
+        ComPtr<ID3D11Texture2D> mippedTexture;
+        if (!d3dCheck(device->CreateTexture2D(&desc, nullptr, &mippedTexture)))
+            return false;
+
+        context->CopySubresourceRegion(mippedTexture.Get(), 0, 0, 0, 0, m_texture.Get(), 0, nullptr);
+
+        // A render texture bound to this texture keeps rendering into the old one,
+        // force a re-activation so it attaches to the replacement
+        if (auto* currentView = m_device.getCurrentRenderTargetView())
+        {
+            ComPtr<ID3D11Resource> currentResource;
+            currentView->GetResource(&currentResource);
+            if (currentResource.Get() == static_cast<ID3D11Resource*>(m_texture.Get()))
+                m_device.setCurrentRenderTargetId(0);
+        }
+
+        m_texture = std::move(mippedTexture);
+        m_shaderResourceView.Reset();
+        if (!d3dCheck(device->CreateShaderResourceView(m_texture.Get(), nullptr, &m_shaderResourceView)))
+            return false;
+    }
 
     context->GenerateMips(m_shaderResourceView.Get());
 

@@ -311,6 +311,19 @@ TEST_CASE("[Graphics] Backend rendering parity", runDisplayTests())
         CHECK(image.getPixel({32, 32}) == sf::Color::Magenta);
     }
 
+    SECTION("Render texture stays usable after generating a mipmap")
+    {
+        sf::RenderTexture inner(sf::Vector2u(64, 64));
+        inner.clear(sf::Color::Yellow);
+        inner.display();
+        REQUIRE(inner.generateMipmap());
+
+        // Rendering must reach the texture again after the mipmap generation
+        inner.clear(sf::Color::Cyan);
+        inner.display();
+        CHECK(inner.getTexture().copyToImage().getPixel({32, 32}) == sf::Color::Cyan);
+    }
+
     SECTION("Render texture drawn into another target")
     {
         sf::RenderTexture inner(sf::Vector2u(50, 50));

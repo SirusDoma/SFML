@@ -35,6 +35,8 @@
 
 namespace sf::priv
 {
+class D3D11TextureImpl;
+
 ////////////////////////////////////////////////////////////
 /// \brief Direct3D 11 implementation of the render texture
 ///
@@ -130,6 +132,8 @@ private:
     // Member data
     ////////////////////////////////////////////////////////////
     D3D11GraphicsDevice&           m_device;              //!< Graphics device the render texture lives on
+    D3D11TextureImpl*              m_targetTexture{};     //!< Implementation of the attached texture, not owned
+    ID3D11Texture2D*               m_attachedTexture{};   //!< Backend texture the target view was created on, not owned
     ComPtr<ID3D11RenderTargetView> m_renderTargetView;    //!< View rendering is directed to
     ComPtr<ID3D11Texture2D>        m_multisampleTexture;  //!< Multisampled color buffer, null when not multisampled
     ComPtr<ID3D11Texture2D>        m_depthStencilTexture; //!< Depth-stencil buffer, can be null
