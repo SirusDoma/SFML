@@ -428,6 +428,50 @@ public:
     ////////////////////////////////////////////////////////////
     [[nodiscard]] ID3D11Buffer* getTriangleFanIndexBuffer(std::size_t vertexCount, std::size_t& indexCount);
 
+    ////////////////////////////////////////////////////////////
+    /// \brief Upload the matrices to the constant buffer if they changed
+    ///
+    /// Consecutive draws usually share the same matrices, the
+    /// upload is skipped when the contents are already on the GPU.
+    ///
+    /// \param constants Model-view, projection and texture matrix, 16 floats each
+    ///
+    ////////////////////////////////////////////////////////////
+    void uploadConstants(const std::array<float, 48>& constants);
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Bind a vertex buffer to the input assembler unless it is already bound
+    ///
+    /// \param buffer Vertex buffer holding `sf::Vertex` data
+    ///
+    ////////////////////////////////////////////////////////////
+    void bindVertexBuffer(ID3D11Buffer* buffer);
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Bind an index buffer to the input assembler unless it is already bound
+    ///
+    /// \param buffer Index buffer holding 32-bit indices
+    ///
+    ////////////////////////////////////////////////////////////
+    void bindIndexBuffer(ID3D11Buffer* buffer);
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Set the primitive topology unless it is already set
+    ///
+    /// \param topology Topology to set
+    ///
+    ////////////////////////////////////////////////////////////
+    void bindTopology(D3D11_PRIMITIVE_TOPOLOGY topology);
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Forget the tracked input-assembler bindings
+    ///
+    /// Must be called when bindings may have been changed outside
+    /// of this class, like by raw Direct3D user code.
+    ///
+    ////////////////////////////////////////////////////////////
+    void invalidateInputBindings();
+
 private:
     ////////////////////////////////////////////////////////////
     /// \brief Create the built-in pipeline objects
@@ -463,6 +507,13 @@ private:
     std::size_t          m_streamVertexBufferCursor{}; //!< Append position in the streaming vertex buffer
     ComPtr<ID3D11Buffer> m_fanIndexBuffer;             //!< Index buffer holding the shared triangle-fan pattern
     std::size_t          m_fanIndexBufferVertices{};   //!< Largest fan vertex count the pattern covers
+
+    ID3D11Buffer* m_currentVertexBuffer{}; //!< Vertex buffer bound to the input assembler, not owned
+    ID3D11Buffer* m_currentIndexBuffer{};  //!< Index buffer bound to the input assembler, not owned
+    D3D11_PRIMITIVE_TOPOLOGY m_currentTopology{D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED}; //!< Topology set on the input assembler
+
+    std::array<float, 48> m_constants{};      //!< CPU copy of the constant buffer contents
+    bool                  m_constantsValid{}; //!< Whether the CPU copy matches the GPU buffer
 
     std::unordered_map<std::uint32_t, ComPtr<ID3D11BlendState>> m_blendStates; //!< Cache of blend state objects, keyed by packed blend mode
     std::unordered_map<std::uint32_t, ComPtr<ID3D11DepthStencilState>> m_depthStencilStates; //!< Cache of depth-stencil state objects, keyed by packed stencil mode

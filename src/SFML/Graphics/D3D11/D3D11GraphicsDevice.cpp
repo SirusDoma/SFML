@@ -771,6 +771,85 @@ ID3D11Buffer* D3D11GraphicsDevice::getTriangleFanIndexBuffer(std::size_t vertexC
 
 
 ////////////////////////////////////////////////////////////
+void D3D11GraphicsDevice::uploadConstants(const std::array<float, 48>& constants)
+{
+    const ContextLock lock(*this);
+
+    if (!m_context || !m_constantBuffer)
+        return;
+
+    // Consecutive draws usually share the same matrices, skip the upload when nothing changed
+    if (m_constantsValid && (std::memcmp(m_constants.data(), constants.data(), sizeof(m_constants)) == 0))
+        return;
+
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    if (!d3dCheck(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+        return;
+
+    std::memcpy(mapped.pData, constants.data(), sizeof(m_constants));
+    m_context->Unmap(m_constantBuffer.Get(), 0);
+
+    m_constants      = constants;
+    m_constantsValid = true;
+}
+
+
+////////////////////////////////////////////////////////////
+void D3D11GraphicsDevice::bindVertexBuffer(ID3D11Buffer* buffer)
+{
+    const ContextLock lock(*this);
+
+    if (!m_context || (m_currentVertexBuffer == buffer))
+        return;
+
+    const UINT stride = sizeof(Vertex);
+    const UINT offset = 0;
+    m_context->IASetVertexBuffers(0, 1, &buffer, &stride, &offset);
+
+    m_currentVertexBuffer = buffer;
+}
+
+
+////////////////////////////////////////////////////////////
+void D3D11GraphicsDevice::bindIndexBuffer(ID3D11Buffer* buffer)
+{
+    const ContextLock lock(*this);
+
+    if (!m_context || (m_currentIndexBuffer == buffer))
+        return;
+
+    m_context->IASetIndexBuffer(buffer, DXGI_FORMAT_R32_UINT, 0);
+
+    m_currentIndexBuffer = buffer;
+}
+
+
+////////////////////////////////////////////////////////////
+void D3D11GraphicsDevice::bindTopology(D3D11_PRIMITIVE_TOPOLOGY topology)
+{
+    const ContextLock lock(*this);
+
+    if (!m_context || (m_currentTopology == topology))
+        return;
+
+    m_context->IASetPrimitiveTopology(topology);
+
+    m_currentTopology = topology;
+}
+
+
+////////////////////////////////////////////////////////////
+void D3D11GraphicsDevice::invalidateInputBindings()
+{
+    const ContextLock lock(*this);
+
+    m_currentVertexBuffer = nullptr;
+    m_currentIndexBuffer  = nullptr;
+    m_currentTopology     = D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
+}
+
+
+////////////////////////////////////////////////////////////
 void D3D11GraphicsDevice::createPipeline()
 {
     // Compile the built-in shaders

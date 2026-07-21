@@ -206,10 +206,7 @@ void D3D11RenderTargetImpl::draw(RenderTarget&       target,
     if (!m_device.uploadVertices(data, vertexCount, firstVertex))
         return;
 
-    auto*      vertexBuffer = m_device.getStreamVertexBuffer();
-    const UINT stride       = sizeof(Vertex);
-    const UINT offset       = 0;
-    context->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
+    m_device.bindVertexBuffer(m_device.getStreamVertexBuffer());
 
     drawPrimitives(type, firstVertex, vertexCount);
     cleanupDraw(target, states);
@@ -240,10 +237,7 @@ void D3D11RenderTargetImpl::draw(RenderTarget&       target,
 
     setupDraw(target, false, states);
 
-    auto*      buffer = impl->getBuffer();
-    const UINT stride = sizeof(Vertex);
-    const UINT offset = 0;
-    context->IASetVertexBuffers(0, 1, &buffer, &stride, &offset);
+    m_device.bindVertexBuffer(impl->getBuffer());
 
     drawPrimitives(vertexBuffer.getPrimitiveType(), firstVertex, vertexCount);
     cleanupDraw(target, states);
@@ -280,7 +274,8 @@ void D3D11RenderTargetImpl::resetStates(RenderTarget& target, std::uint64_t id)
     {
         auto& cache = getCache(target);
 
-        // Bind the built-in pipeline
+        // Bind the built-in pipeline, raw user code may have changed any binding
+        m_device.invalidateInputBindings();
         context->IASetInputLayout(m_device.getInputLayout());
         context->RSSetState(m_device.getRasterizerState(false));
 
@@ -507,8 +502,8 @@ void D3D11RenderTargetImpl::drawPrimitives(PrimitiveType type, std::size_t first
         if (!indexBuffer)
             return;
 
-        context->IASetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
-        context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        m_device.bindIndexBuffer(indexBuffer);
+        m_device.bindTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context->DrawIndexed(static_cast<UINT>(indexCount), 0, static_cast<INT>(firstVertex));
         return;
     }
@@ -527,7 +522,7 @@ void D3D11RenderTargetImpl::drawPrimitives(PrimitiveType type, std::size_t first
     }
     // clang-format on
 
-    context->IASetPrimitiveTopology(topology);
+    m_device.bindTopology(topology);
     context->Draw(static_cast<UINT>(vertexCount), static_cast<UINT>(firstVertex));
 }
 
@@ -555,20 +550,12 @@ void D3D11RenderTargetImpl::cleanupDraw(RenderTarget& target, const RenderStates
 ////////////////////////////////////////////////////////////
 void D3D11RenderTargetImpl::uploadConstants()
 {
-    auto* context        = m_device.getContext();
-    auto* constantBuffer = m_device.getConstantBuffer();
-    if (!constantBuffer)
-        return;
+    std::array<float, 48> constants{};
+    std::memcpy(constants.data(), m_modelView.data(), sizeof(float) * 16);
+    std::memcpy(constants.data() + 16, m_projection.data(), sizeof(float) * 16);
+    std::memcpy(constants.data() + 32, m_textureMatrix.data(), sizeof(float) * 16);
 
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    if (!d3dCheck(context->Map(constantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
-        return;
-
-    auto* destination = static_cast<float*>(mapped.pData);
-    std::memcpy(destination, m_modelView.data(), sizeof(float) * 16);
-    std::memcpy(destination + 16, m_projection.data(), sizeof(float) * 16);
-    std::memcpy(destination + 32, m_textureMatrix.data(), sizeof(float) * 16);
-    context->Unmap(constantBuffer, 0);
+    m_device.uploadConstants(constants);
 }
 
 } // namespace sf::priv
