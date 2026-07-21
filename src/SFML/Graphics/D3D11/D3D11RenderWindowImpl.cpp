@@ -84,8 +84,8 @@ D3D11RenderWindowImpl::D3D11RenderWindowImpl(D3D11GraphicsDevice&          devic
     // clang-format off
     constexpr std::size_t     blitAttempt = 2;
     const std::array<Attempt, 3> attempts = {{
-        {DXGI_SWAP_EFFECT_FLIP_DISCARD,    2, DXGI_FORMAT_R8G8B8A8_UNORM, tearingFlag}, // Windows 10
-        {DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL, 2, DXGI_FORMAT_R8G8B8A8_UNORM, 0},           // Windows 8
+        {DXGI_SWAP_EFFECT_FLIP_DISCARD,    3, DXGI_FORMAT_R8G8B8A8_UNORM, tearingFlag}, // Windows 10
+        {DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL, 3, DXGI_FORMAT_R8G8B8A8_UNORM, 0},           // Windows 8
         {DXGI_SWAP_EFFECT_DISCARD,         1, blitFormat,                 0},           // Windows 7
     }};
     // clang-format on
