@@ -250,12 +250,7 @@ void MetalShaderImpl::setUniform(const std::string& name, const Glsl::Mat4& matr
 void MetalShaderImpl::setUniform(const std::string& name, const Texture& texture)
 {
     m_textures[name] = &texture;
-
-    // The last assignment wins, like overwriting a GLSL sampler uniform does
-    if (m_currentTextureName == name)
-        m_currentTextureName.clear();
-
-    m_revision = getRevisionCounter().fetch_add(1, std::memory_order_relaxed);
+    m_revision       = getRevisionCounter().fetch_add(1, std::memory_order_relaxed);
 }
 
 
@@ -263,11 +258,7 @@ void MetalShaderImpl::setUniform(const std::string& name, const Texture& texture
 void MetalShaderImpl::setCurrentTextureUniform(const std::string& name)
 {
     m_currentTextureName = name;
-
-    // The last assignment wins, unassigned textures sample the draw's texture
-    m_textures.erase(name);
-
-    m_revision = getRevisionCounter().fetch_add(1, std::memory_order_relaxed);
+    m_revision           = getRevisionCounter().fetch_add(1, std::memory_order_relaxed);
 }
 
 
@@ -547,11 +538,14 @@ void MetalShaderImpl::bindStage(const Stage& stage, bool fragment) const
     for (const auto& [name, slot] : stage.textureSlots)
     {
         // An assigned texture is bound with its own sampler; the CurrentTexture uniform and
-        // textures the shader declares without assigning one sample the draw's texture
+        // textures the shader declares without assigning one sample the draw's texture.
+        // The CurrentTexture designation takes precedence over an assignment to the same
+        // name, matching the bind order of the OpenGL backend.
         id<MTLTexture>      texture = m_device.getCurrentTextureView();
         id<MTLSamplerState> sampler = m_device.getCurrentTextureSampler();
 
-        if (const auto it = m_textures.find(name); it != m_textures.end())
+        if (const auto it = (name != m_currentTextureName) ? m_textures.find(name) : m_textures.end();
+            it != m_textures.end())
         {
             if (auto* impl = static_cast<MetalTextureImpl*>(getTextureImpl(*it->second)); impl && impl->getTexture())
             {
