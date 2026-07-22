@@ -74,13 +74,18 @@ float lightFactor   = 0.7f;
 
 
 ////////////////////////////////////////////////////////////
-/// Shading language helper, the shader sources are provided
+/// Shading language helpers, the shader sources are provided
 /// in the language the active backend consumes.
 ///
 ////////////////////////////////////////////////////////////
 bool useHlsl()
 {
     return sf::getShadingLanguage() == sf::ShadingLanguage::Hlsl;
+}
+
+bool useMsl()
+{
+    return sf::getShadingLanguage() == sf::ShadingLanguage::Msl;
 }
 
 
@@ -438,17 +443,24 @@ void generateTerrain(sf::Vertex* buffer)
 ////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
-    // Use the Direct3D 11 renderer when it is available, pass "gl" to force OpenGL
+    // Use the platform's native renderer when it is available, pass "gl" to force OpenGL
     if (!(argc > 1 && std::string(argv[1]) == "gl"))
     {
-        sf::setRenderer(sf::Renderer::Direct3D11);
-        if (sf::getRenderer() != sf::Renderer::Direct3D11)
-            std::cerr << "Direct3D 11 is not available, running on OpenGL instead" << std::endl;
+#ifdef SFML_SYSTEM_MACOS
+        constexpr sf::Renderer nativeRenderer = sf::Renderer::Metal;
+#else
+        constexpr sf::Renderer nativeRenderer = sf::Renderer::Direct3D11;
+#endif
+        sf::setRenderer(nativeRenderer);
+        if (sf::getRenderer() != nativeRenderer)
+            std::cerr << "The native renderer is not available, running on OpenGL instead" << std::endl;
     }
 
     // Create the window of the application
     sf::RenderWindow window(sf::VideoMode(windowSize),
-                            useHlsl() ? "SFML Island (Direct3D 11)" : "SFML Island (OpenGL)",
+                            useHlsl()  ? "SFML Island (Direct3D 11)"
+                            : useMsl() ? "SFML Island (Metal)"
+                                       : "SFML Island (OpenGL)",
                             sf::Style::Titlebar | sf::Style::Close);
     window.setVerticalSyncEnabled(true);
 
@@ -484,8 +496,9 @@ int main(int argc, char* argv[])
     {
         statusText.setString("Shaders and/or Vertex Buffers Unsupported");
     }
-    else if (useHlsl() ? !terrainShader.loadFromFile("resources/terrain-vs.hlsl", "resources/terrain-ps.hlsl")
-                       : !terrainShader.loadFromFile("resources/terrain.vert", "resources/terrain.frag"))
+    else if (useHlsl()  ? !terrainShader.loadFromFile("resources/terrain-vs.hlsl", "resources/terrain-ps.hlsl")
+             : useMsl() ? !terrainShader.loadFromFile("resources/terrain-vs.metal", "resources/terrain-ps.metal")
+                        : !terrainShader.loadFromFile("resources/terrain.vert", "resources/terrain.frag"))
     {
         statusText.setString("Failed to load shader program");
     }

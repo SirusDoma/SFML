@@ -353,15 +353,21 @@ private:
 ////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
-    // Use the Direct3D 11 renderer when it is available, pass "gl" to force OpenGL
+    // Use the platform's native renderer when it is available, pass "gl" to force OpenGL
     if (!(argc > 1 && std::string(argv[1]) == "gl"))
     {
-        sf::setRenderer(sf::Renderer::Direct3D11);
-        if (sf::getRenderer() != sf::Renderer::Direct3D11)
-            std::cerr << "Direct3D 11 is not available, running on OpenGL instead" << std::endl;
+#ifdef SFML_SYSTEM_MACOS
+        constexpr sf::Renderer nativeRenderer = sf::Renderer::Metal;
+#else
+        constexpr sf::Renderer nativeRenderer = sf::Renderer::Direct3D11;
+#endif
+        sf::setRenderer(nativeRenderer);
+        if (sf::getRenderer() != nativeRenderer)
+            std::cerr << "The native renderer is not available, running on OpenGL instead" << std::endl;
     }
 
     const auto* title = sf::getRenderer() == sf::Renderer::Direct3D11 ? "SFML Custom Render Target (Direct3D 11)"
+                        : sf::getRenderer() == sf::Renderer::Metal    ? "SFML Custom Render Target (Metal)"
                                                                       : "SFML Custom Render Target (OpenGL)";
 
     sf::RenderWindow window(sf::VideoMode({800, 600}), title, sf::Style::Titlebar | sf::Style::Close);

@@ -16,6 +16,11 @@ TEST_CASE("[Graphics] sf::Renderer", runDisplayTests())
 
         const auto renderers = sf::getAvailableRenderers();
         CHECK(std::find(renderers.begin(), renderers.end(), sf::Renderer::OpenGL) != renderers.end());
+
+#ifdef SFML_TEST_METAL_AVAILABLE
+        CHECK(sf::isRendererAvailable(sf::Renderer::Metal));
+        CHECK(std::find(renderers.begin(), renderers.end(), sf::Renderer::Metal) != renderers.end());
+#endif
     }
 
     SECTION("Default renderer")
@@ -34,5 +39,11 @@ TEST_CASE("[Graphics] sf::Renderer", runDisplayTests())
         const sf::Texture texture;
         sf::setRenderer(sf::Renderer::Direct3D11);
         CHECK(sf::getRenderer() == sf::Renderer::OpenGL);
+
+#ifdef SFML_TEST_METAL_AVAILABLE
+        // Metal is available here, selecting it must still fail while locked in
+        sf::setRenderer(sf::Renderer::Metal);
+        CHECK(sf::getRenderer() == sf::Renderer::OpenGL);
+#endif
     }
 }

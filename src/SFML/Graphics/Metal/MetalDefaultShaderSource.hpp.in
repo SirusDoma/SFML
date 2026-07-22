@@ -1,0 +1,5 @@
+// Generated from DefaultShader.metal, used when no shader compiler was available at build time
+
+constexpr const char* defaultShaderSource = R"SFMLSHADER(
+@SFML_METAL_DEFAULT_SHADER@
+)SFMLSHADER";

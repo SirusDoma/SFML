@@ -137,6 +137,8 @@ endif()
 
 # setup macOS stuff
 if(SFML_OS_MACOS)
+    sfml_set_option(SFML_ENABLE_METAL ON BOOL "ON to compile the Metal graphics backend in addition to OpenGL")
+
     # SFML_BUILD_FRAMEWORKS needs two things:
     # first, it's available only for release
     #    (because cmake currently doesn't allow specifying a custom framework name so XXX-d is not possible)

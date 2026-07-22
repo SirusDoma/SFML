@@ -21,14 +21,18 @@ namespace
 {
 ////////////////////////////////////////////////////////////
 // The same rendering checks run on every backend: the default
-// one, and Direct3D 11 when this file is compiled into the
-// test-sfml-graphics-d3d11 target.
+// one, Direct3D 11 when this file is compiled into the
+// test-sfml-graphics-d3d11 target, and Metal when compiled
+// into the test-sfml-graphics-metal target.
 ////////////////////////////////////////////////////////////
 bool selectBackend()
 {
-#ifdef SFML_TEST_BACKEND_D3D11
+#if defined(SFML_TEST_BACKEND_D3D11)
     sf::setRenderer(sf::Renderer::Direct3D11);
     return sf::getRenderer() == sf::Renderer::Direct3D11;
+#elif defined(SFML_TEST_BACKEND_METAL)
+    sf::setRenderer(sf::Renderer::Metal);
+    return sf::getRenderer() == sf::Renderer::Metal;
 #else
     return true;
 #endif
@@ -52,6 +56,23 @@ struct PSInput
 float4 main(PSInput input) : SV_TARGET
 {
     return input.color * float4(0.0f, 1.0f, 0.0f, 1.0f);
+}
+)";
+
+constexpr std::string_view tintFragmentMsl = R"(
+#include <metal_stdlib>
+using namespace metal;
+
+struct FragmentInput
+{
+    float4 position [[position]];
+    float4 color;
+    float2 texCoords;
+};
+
+fragment float4 tint(FragmentInput input [[stage_in]])
+{
+    return input.color * float4(0.0, 1.0, 0.0, 1.0);
 }
 )";
 
@@ -83,6 +104,40 @@ PSInput main(VSInput input)
 }
 )";
 
+constexpr std::string_view matricesVertexMsl = R"(
+#include <metal_stdlib>
+using namespace metal;
+
+struct SFMLConstants
+{
+    float4x4 modelView;
+    float4x4 projection;
+    float4x4 textureMatrix;
+};
+
+struct VertexInput
+{
+    float2 position  [[attribute(0)]];
+    float4 color     [[attribute(1)]];
+    float2 texCoords [[attribute(2)]];
+};
+
+struct VertexOutput
+{
+    float4 position [[position]];
+    float4 color;
+};
+
+vertex VertexOutput transformVertex(VertexInput input [[stage_in]],
+                                    constant SFMLConstants& sfmlConstants [[buffer(1)]])
+{
+    VertexOutput output;
+    output.position = sfmlConstants.projection * (sfmlConstants.modelView * float4(input.position, 0.0, 1.0));
+    output.color    = input.color;
+    return output;
+}
+)";
+
 constexpr std::string_view flatFragmentGlsl = R"(
 void main()
 {
@@ -98,6 +153,36 @@ float4 main(PSInput input) : SV_TARGET
     return float4(0.0f, 1.0f, 0.0f, 1.0f);
 }
 )";
+
+constexpr std::string_view flatFragmentMsl = R"(
+#include <metal_stdlib>
+using namespace metal;
+
+struct FragmentInput
+{
+    float4 position [[position]];
+    float4 color;
+};
+
+fragment float4 flat(FragmentInput input [[stage_in]])
+{
+    return float4(0.0, 1.0, 0.0, 1.0);
+}
+)";
+
+// Pick the shader source matching the shading language of the selected backend
+std::string_view selectShader(std::string_view glsl, std::string_view hlsl, std::string_view msl)
+{
+    switch (sf::getShadingLanguage())
+    {
+        case sf::ShadingLanguage::Hlsl:
+            return hlsl;
+        case sf::ShadingLanguage::Msl:
+            return msl;
+        default:
+            return glsl;
+    }
+}
 
 std::array<sf::Vertex, 6> makeQuad(sf::Vector2f position, sf::Vector2f size, sf::Color color)
 {
@@ -120,9 +205,7 @@ sf::Image render(sf::RenderTexture& target)
 TEST_CASE("[Graphics] Backend rendering parity", runDisplayTests())
 {
     if (!selectBackend())
-        SKIP("The Direct3D 11 backend is not available");
-
-    const bool hlsl = sf::getShadingLanguage() == sf::ShadingLanguage::Hlsl;
+        SKIP("The requested backend is not available");
 
     sf::RenderTexture target(sf::Vector2u(100, 100));
 
@@ -243,7 +326,8 @@ TEST_CASE("[Graphics] Backend rendering parity", runDisplayTests())
     SECTION("Fragment shader tint")
     {
         sf::Shader shader;
-        REQUIRE(shader.loadFromMemory(hlsl ? tintFragmentHlsl : tintFragmentGlsl, sf::Shader::Type::Fragment));
+        REQUIRE(shader.loadFromMemory(selectShader(tintFragmentGlsl, tintFragmentHlsl, tintFragmentMsl),
+                                      sf::Shader::Type::Fragment));
 
         target.clear(sf::Color::Black);
         const auto quad = makeQuad({0, 0}, {100, 100}, sf::Color::White);
@@ -272,8 +356,8 @@ TEST_CASE("[Graphics] Backend rendering parity", runDisplayTests())
         SECTION("Draw with a user shader")
         {
             sf::Shader shader;
-            REQUIRE(shader.loadFromMemory(hlsl ? matricesVertexHlsl : matricesVertexGlsl,
-                                          hlsl ? flatFragmentHlsl : flatFragmentGlsl));
+            REQUIRE(shader.loadFromMemory(selectShader(matricesVertexGlsl, matricesVertexHlsl, matricesVertexMsl),
+                                          selectShader(flatFragmentGlsl, flatFragmentHlsl, flatFragmentMsl)));
 
             target.clear(sf::Color::Blue);
             target.draw(buffer, sf::RenderStates(&shader));
@@ -358,14 +442,24 @@ TEST_CASE("[Graphics] Backend rendering parity", runDisplayTests())
             window.clear(sf::Color::Green);
             window.display();
 
-            window.clear(sf::Color::Green);
-            sf::Texture texture(window.getSize());
-            texture.update(window);
-            CHECK(texture.copyToImage().getPixel({60, 45}) == sf::Color::Green);
+            // On Metal the explicit intents trade window readback for the direct-to-display
+            // fast path, only the balanced default keeps the drawables readable
+#ifdef SFML_TEST_BACKEND_METAL
+            const bool readable = presentation == sf::ContextSettings::Presentation::Auto;
+#else
+            const bool readable = true;
+#endif
+            if (readable)
+            {
+                window.clear(sf::Color::Green);
+                sf::Texture texture(window.getSize());
+                texture.update(window);
+                CHECK(texture.copyToImage().getPixel({60, 45}) == sf::Color::Green);
+            }
 
-#ifdef SFML_TEST_BACKEND_D3D11
+#if defined(SFML_TEST_BACKEND_D3D11) || defined(SFML_TEST_BACKEND_METAL)
             // The achieved presentation path is reported back, only an explicit
-            // low-latency request selects the flip-model path
+            // low-latency request selects the low-latency path
             if (presentation == sf::ContextSettings::Presentation::LowLatency)
                 CHECK(window.getSettings().presentation == sf::ContextSettings::Presentation::LowLatency);
             else

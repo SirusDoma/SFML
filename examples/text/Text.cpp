@@ -637,16 +637,23 @@ struct DemoText
 ////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
-    // Use the Direct3D 11 renderer when it is available, pass "gl" to force OpenGL
+    // Use the platform's native renderer when it is available, pass "gl" to force OpenGL
     if (!(argc > 1 && std::string(argv[1]) == "gl"))
     {
-        sf::setRenderer(sf::Renderer::Direct3D11);
-        if (sf::getRenderer() != sf::Renderer::Direct3D11)
-            std::cerr << "Direct3D 11 is not available, running on OpenGL instead" << std::endl;
+#ifdef SFML_SYSTEM_MACOS
+        constexpr sf::Renderer nativeRenderer = sf::Renderer::Metal;
+#else
+        constexpr sf::Renderer nativeRenderer = sf::Renderer::Direct3D11;
+#endif
+        sf::setRenderer(nativeRenderer);
+        if (sf::getRenderer() != nativeRenderer)
+            std::cerr << "The native renderer is not available, running on OpenGL instead" << std::endl;
     }
 
     sf::RenderWindow window(sf::VideoMode({windowWidth, 800u}),
-                            sf::getRenderer() == sf::Renderer::Direct3D11 ? "SFML Text (Direct3D 11)" : "SFML Text (OpenGL)",
+                            sf::getRenderer() == sf::Renderer::Direct3D11 ? "SFML Text (Direct3D 11)"
+                            : sf::getRenderer() == sf::Renderer::Metal    ? "SFML Text (Metal)"
+                                                                          : "SFML Text (OpenGL)",
                             sf::Style::Titlebar | sf::Style::Close);
     window.setVerticalSyncEnabled(true);
 

@@ -51,6 +51,20 @@ if(SFML_OS_WINDOWS AND SFML_ENABLE_D3D11)
     endif()
 endif()
 
+# The build options are not visible to the tests, tell them the Metal backend is compiled in
+if(SFML_OS_MACOS AND SFML_ENABLE_METAL)
+    target_compile_definitions(test-sfml-graphics PRIVATE SFML_TEST_METAL_AVAILABLE)
+endif()
+
+# Run the same rendering checks on the Metal backend
+if(SFML_OS_MACOS AND SFML_ENABLE_METAL)
+    sfml_add_test(test-sfml-graphics-metal "BackendParity.test.cpp" SFML::Graphics)
+    target_compile_definitions(test-sfml-graphics-metal PRIVATE SFML_TEST_BACKEND_METAL)
+    if(SFML_RUN_DISPLAY_TESTS)
+        target_compile_definitions(test-sfml-graphics-metal PRIVATE SFML_RUN_DISPLAY_TESTS)
+    endif()
+endif()
+
 if (XCODE AND SFML_OS_IOS)
     set(GRAPHICS_RESOURCES
         invalid_shader.vert

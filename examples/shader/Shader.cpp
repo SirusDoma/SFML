@@ -29,6 +29,11 @@ bool useHlsl()
     return sf::getShadingLanguage() == sf::ShadingLanguage::Hlsl;
 }
 
+bool useMsl()
+{
+    return sf::getShadingLanguage() == sf::ShadingLanguage::Msl;
+}
+
 const char* currentTextureName()
 {
     // "texture" is a reserved word in HLSL
@@ -299,7 +304,10 @@ std::optional<Pixelate> tryLoadPixelate()
         return std::nullopt;
 
     sf::Shader shader;
-    if (!shader.loadFromFile(useHlsl() ? "resources/pixelate.hlsl" : "resources/pixelate.frag", sf::Shader::Type::Fragment))
+    if (!shader.loadFromFile(useHlsl()  ? "resources/pixelate.hlsl"
+                             : useMsl() ? "resources/pixelate.metal"
+                                        : "resources/pixelate.frag",
+                             sf::Shader::Type::Fragment))
         return std::nullopt;
 
     return std::make_optional<Pixelate>(std::move(texture), std::move(shader));
@@ -308,8 +316,9 @@ std::optional<Pixelate> tryLoadPixelate()
 std::optional<WaveBlur> tryLoadWaveBlur(const sf::Font& font)
 {
     sf::Shader shader;
-    if (useHlsl() ? !shader.loadFromFile("resources/wave.hlsl", "resources/blur.hlsl")
-                  : !shader.loadFromFile("resources/wave.vert", "resources/blur.frag"))
+    if (useHlsl()  ? !shader.loadFromFile("resources/wave.hlsl", "resources/blur.hlsl")
+        : useMsl() ? !shader.loadFromFile("resources/wave.metal", "resources/blur.metal")
+                   : !shader.loadFromFile("resources/wave.vert", "resources/blur.frag"))
         return std::nullopt;
 
     return std::make_optional<WaveBlur>(font, std::move(shader));
@@ -318,8 +327,9 @@ std::optional<WaveBlur> tryLoadWaveBlur(const sf::Font& font)
 std::optional<StormBlink> tryLoadStormBlink()
 {
     sf::Shader shader;
-    if (useHlsl() ? !shader.loadFromFile("resources/storm.hlsl", "resources/blink.hlsl")
-                  : !shader.loadFromFile("resources/storm.vert", "resources/blink.frag"))
+    if (useHlsl()  ? !shader.loadFromFile("resources/storm.hlsl", "resources/blink.hlsl")
+        : useMsl() ? !shader.loadFromFile("resources/storm.metal", "resources/blink.metal")
+                   : !shader.loadFromFile("resources/storm.vert", "resources/blink.frag"))
         return std::nullopt;
 
     return std::make_optional<StormBlink>(std::move(shader));
@@ -350,7 +360,10 @@ std::optional<Edge> tryLoadEdge()
 
     // Load the shader
     sf::Shader shader;
-    if (!shader.loadFromFile(useHlsl() ? "resources/edge.hlsl" : "resources/edge.frag", sf::Shader::Type::Fragment))
+    if (!shader.loadFromFile(useHlsl()  ? "resources/edge.hlsl"
+                             : useMsl() ? "resources/edge.metal"
+                                        : "resources/edge.frag",
+                             sf::Shader::Type::Fragment))
         return std::nullopt;
 
     shader.setUniform(currentTextureName(), sf::Shader::CurrentTexture);
@@ -399,12 +412,17 @@ std::optional<Geometry> tryLoadGeometry()
 ////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
-    // Use the Direct3D 11 renderer when it is available, pass "gl" to force OpenGL
+    // Use the platform's native renderer when it is available, pass "gl" to force OpenGL
     if (!(argc > 1 && std::string(argv[1]) == "gl"))
     {
-        sf::setRenderer(sf::Renderer::Direct3D11);
-        if (sf::getRenderer() != sf::Renderer::Direct3D11)
-            std::cerr << "Direct3D 11 is not available, running on OpenGL instead" << std::endl;
+#ifdef SFML_SYSTEM_MACOS
+        constexpr sf::Renderer nativeRenderer = sf::Renderer::Metal;
+#else
+        constexpr sf::Renderer nativeRenderer = sf::Renderer::Direct3D11;
+#endif
+        sf::setRenderer(nativeRenderer);
+        if (sf::getRenderer() != nativeRenderer)
+            std::cerr << "The native renderer is not available, running on OpenGL instead" << std::endl;
     }
 
     // Exit early if shaders are not available
@@ -416,7 +434,9 @@ int main(int argc, char* argv[])
 
     // Create the main window
     sf::RenderWindow window(sf::VideoMode({800, 600}),
-                            useHlsl() ? "SFML Shader (Direct3D 11)" : "SFML Shader (OpenGL)",
+                            useHlsl()  ? "SFML Shader (Direct3D 11)"
+                            : useMsl() ? "SFML Shader (Metal)"
+                                       : "SFML Shader (OpenGL)",
                             sf::Style::Titlebar | sf::Style::Close);
     window.setVerticalSyncEnabled(true);
 

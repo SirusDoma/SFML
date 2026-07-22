@@ -44,8 +44,9 @@ namespace sf
 ////////////////////////////////////////////////////////////
 enum class Renderer
 {
-    OpenGL,    //!< OpenGL renderer, available on all platforms
-    Direct3D11 //!< Direct3D 11 renderer, only available on Windows
+    OpenGL,     //!< OpenGL renderer, available on all platforms
+    Direct3D11, //!< Direct3D 11 renderer, only available on Windows
+    Metal       //!< Metal renderer, only available on macOS
 };
 
 ////////////////////////////////////////////////////////////
@@ -55,7 +56,8 @@ enum class Renderer
 enum class ShadingLanguage
 {
     Glsl, //!< OpenGL Shading Language, consumed by the OpenGL renderer
-    Hlsl  //!< High-Level Shading Language, consumed by the Direct3D 11 renderer
+    Hlsl, //!< High-Level Shading Language, consumed by the Direct3D 11 renderer
+    Msl   //!< Metal Shading Language, consumed by the Metal renderer
 };
 
 ////////////////////////////////////////////////////////////
@@ -137,7 +139,8 @@ SFML_GRAPHICS_API void setRenderer(Renderer renderer);
 ///
 /// The graphics module can render through different renderers.
 /// OpenGL is the default and is always available; additional
-/// renderers depend on the platform and build options.
+/// renderers depend on the platform and build options:
+/// Direct3D 11 on Windows and Metal on macOS.
 ///
 /// The renderer has to be chosen up front, before any graphics
 /// resource is created:
@@ -151,9 +154,19 @@ SFML_GRAPHICS_API void setRenderer(Renderer renderer);
 /// sf::RenderWindow window(sf::VideoMode({640, 480}), "Renderer demo");
 /// \endcode
 ///
+/// Shaders are written in the shading language of the active
+/// renderer, query it with `sf::getShadingLanguage`. Metal
+/// shader sources contain a single `vertex` or `fragment`
+/// function whose name is free; uniforms live in constant
+/// buffer structs matched by member name, with vertex buffer
+/// indices 0 and 1 reserved for the vertex data and the SFML
+/// matrices.
+///
 /// Note that the raw OpenGL interoperability functions in the
 /// `sf::OpenGL` namespace (saving and restoring states, binding
 /// resources for direct OpenGL use) only have an effect when
-/// the OpenGL renderer is active.
+/// the OpenGL renderer is active; their counterparts for the
+/// other renderers live in the `sf::D3D11` and `sf::Metal`
+/// namespaces.
 ///
 ////////////////////////////////////////////////////////////

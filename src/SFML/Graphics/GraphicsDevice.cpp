@@ -33,6 +33,10 @@
 #include <SFML/Graphics/D3D11/D3D11GraphicsDevice.hpp>
 #endif
 
+#ifdef SFML_ENABLE_METAL
+#include <SFML/Graphics/Metal/MetalGraphicsDevice.hpp>
+#endif
+
 #include <SFML/System/Err.hpp>
 
 #include <algorithm>
@@ -90,6 +94,14 @@ std::shared_ptr<GraphicsDevice> ensureGraphicsDevice()
 #else
                 // Unreachable, setRenderer only accepts compiled-in backends
                 assert(false && "The Direct3D 11 backend is not compiled in");
+#endif
+                break;
+            case Renderer::Metal:
+#ifdef SFML_ENABLE_METAL
+                device = std::make_shared<MetalGraphicsDevice>();
+#else
+                // Unreachable, setRenderer only accepts compiled-in backends
+                assert(false && "The Metal backend is not compiled in");
 #endif
                 break;
         }
@@ -156,6 +168,9 @@ std::vector<Renderer> getAvailableRenderers()
 #ifdef SFML_ENABLE_D3D11
         Renderer::Direct3D11,
 #endif
+#ifdef SFML_ENABLE_METAL
+        Renderer::Metal,
+#endif
     };
 }
 
@@ -177,7 +192,15 @@ ShadingLanguage getShadingLanguage()
     if (const auto device = getWeakGraphicsDevice().lock())
         return device->getShadingLanguage();
 
-    return getPendingRenderer() == Renderer::OpenGL ? ShadingLanguage::Glsl : ShadingLanguage::Hlsl;
+    switch (getPendingRenderer())
+    {
+        case Renderer::Direct3D11:
+            return ShadingLanguage::Hlsl;
+        case Renderer::Metal:
+            return ShadingLanguage::Msl;
+        default:
+            return ShadingLanguage::Glsl;
+    }
 }
 
 } // namespace sf

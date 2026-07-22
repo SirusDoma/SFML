@@ -22,6 +22,8 @@ set(SRC
     ${SRCROOT}/GraphicsDevice.hpp
     ${SRCROOT}/Image.cpp
     ${INCROOT}/Image.hpp
+    ${INCROOT}/MetalInterop.hpp
+    ${SRCROOT}/MetalInterop.cpp
     ${INCROOT}/OpenGLInterop.hpp
     ${SRCROOT}/OpenGLInterop.cpp
     ${INCROOT}/PrimitiveType.hpp
@@ -151,9 +153,59 @@ if(SFML_OS_WINDOWS AND SFML_ENABLE_D3D11)
 endif()
 
 
+# Metal backend sources
+if(SFML_OS_MACOS AND SFML_ENABLE_METAL)
+    enable_language(OBJCXX)
+
+    # The interop implementation needs the Objective-C++ Metal types when the backend is compiled in
+    set_source_files_properties(${SRCROOT}/MetalInterop.cpp PROPERTIES LANGUAGE OBJCXX)
+
+    set(METAL_SRC
+        ${SRCROOT}/Metal/MetalGraphicsDevice.hpp
+        ${SRCROOT}/Metal/MetalGraphicsDevice.mm
+        ${SRCROOT}/Metal/MetalRenderTargetImpl.hpp
+        ${SRCROOT}/Metal/MetalRenderTargetImpl.mm
+        ${SRCROOT}/Metal/MetalRenderTextureImpl.hpp
+        ${SRCROOT}/Metal/MetalRenderTextureImpl.mm
+        ${SRCROOT}/Metal/MetalRenderWindowImpl.hpp
+        ${SRCROOT}/Metal/MetalRenderWindowImpl.mm
+        ${SRCROOT}/Metal/MetalShaderImpl.hpp
+        ${SRCROOT}/Metal/MetalShaderImpl.mm
+        ${SRCROOT}/Metal/MetalTextureImpl.hpp
+        ${SRCROOT}/Metal/MetalTextureImpl.mm
+        ${SRCROOT}/Metal/MetalUtils.hpp
+        ${SRCROOT}/Metal/MetalUtils.mm
+        ${SRCROOT}/Metal/MetalVertexBufferImpl.hpp
+        ${SRCROOT}/Metal/MetalVertexBufferImpl.mm
+        ${SRCROOT}/Metal/DefaultShader.metal
+    )
+    source_group("metal" FILES ${METAL_SRC})
+    set_source_files_properties(${SRCROOT}/Metal/DefaultShader.metal PROPERTIES HEADER_FILE_ONLY TRUE)
+
+    # The built-in shaders are compiled to a library at build time when the shader compiler
+    # is available, otherwise the source is embedded and compiled at run time
+    execute_process(COMMAND xcrun -sdk macosx -f metal
+                    RESULT_VARIABLE SFML_METAL_COMPILER_MISSING
+                    OUTPUT_QUIET ERROR_QUIET)
+    if(NOT SFML_METAL_COMPILER_MISSING)
+        add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/MetalDefaultShaderLibrary.hpp
+                           COMMAND xcrun -sdk macosx metal -O3 -o ${CMAKE_CURRENT_BINARY_DIR}/MetalDefaultShader.ir -c ${SRCROOT}/Metal/DefaultShader.metal
+                           COMMAND xcrun -sdk macosx metallib -o ${CMAKE_CURRENT_BINARY_DIR}/MetalDefaultShader.metallib ${CMAKE_CURRENT_BINARY_DIR}/MetalDefaultShader.ir
+                           COMMAND ${CMAKE_COMMAND} -DINPUT=${CMAKE_CURRENT_BINARY_DIR}/MetalDefaultShader.metallib -DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/MetalDefaultShaderLibrary.hpp -P ${PROJECT_SOURCE_DIR}/tools/metal/EmbedMetallib.cmake
+                           DEPENDS ${SRCROOT}/Metal/DefaultShader.metal ${PROJECT_SOURCE_DIR}/tools/metal/EmbedMetallib.cmake
+                           COMMENT "Compiling the built-in Metal shaders")
+        list(APPEND METAL_SRC ${CMAKE_CURRENT_BINARY_DIR}/MetalDefaultShaderLibrary.hpp)
+    else()
+        file(READ ${SRCROOT}/Metal/DefaultShader.metal SFML_METAL_DEFAULT_SHADER)
+        configure_file(${SRCROOT}/Metal/MetalDefaultShaderSource.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/MetalDefaultShaderSource.hpp @ONLY)
+        list(APPEND METAL_SRC ${CMAKE_CURRENT_BINARY_DIR}/MetalDefaultShaderSource.hpp)
+    endif()
+endif()
+
+
 # define the sfml-graphics target
 sfml_add_library(Graphics
-                 SOURCES ${SRC} ${DRAWABLES_SRC} ${OPENGL_SRC} ${D3D11_SRC}
+                 SOURCES ${SRC} ${DRAWABLES_SRC} ${OPENGL_SRC} ${D3D11_SRC} ${METAL_SRC}
                  DEPENDENCIES "Dependencies.cmake.in")
 
 # Direct3D 11 backend dependencies
@@ -176,6 +228,17 @@ if(SFML_OS_WINDOWS AND SFML_ENABLE_D3D11)
                 target_link_libraries(sfml-graphics PUBLIC delayimp)
             endif()
         endif()
+    endif()
+endif()
+
+# Metal backend dependencies
+if(SFML_OS_MACOS AND SFML_ENABLE_METAL)
+    target_compile_definitions(sfml-graphics PRIVATE "SFML_ENABLE_METAL")
+    target_link_libraries(sfml-graphics PRIVATE "-framework Metal" "-framework QuartzCore")
+    target_include_directories(sfml-graphics PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
+    if(NOT SFML_METAL_COMPILER_MISSING)
+        target_compile_definitions(sfml-graphics PRIVATE "SFML_METAL_PRECOMPILED_SHADERS")
     endif()
 endif()
 

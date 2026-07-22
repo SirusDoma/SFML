@@ -18,17 +18,24 @@
 ////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
-    // Use the Direct3D 11 renderer when it is available, pass "gl" to force OpenGL
+    // Use the platform's native renderer when it is available, pass "gl" to force OpenGL
     if (!(argc > 1 && std::string(argv[1]) == "gl"))
     {
-        sf::setRenderer(sf::Renderer::Direct3D11);
-        if (sf::getRenderer() != sf::Renderer::Direct3D11)
-            std::cerr << "Direct3D 11 is not available, running on OpenGL instead" << std::endl;
+#ifdef SFML_SYSTEM_MACOS
+        constexpr sf::Renderer nativeRenderer = sf::Renderer::Metal;
+#else
+        constexpr sf::Renderer nativeRenderer = sf::Renderer::Direct3D11;
+#endif
+        sf::setRenderer(nativeRenderer);
+        if (sf::getRenderer() != nativeRenderer)
+            std::cerr << "The native renderer is not available, running on OpenGL instead" << std::endl;
     }
 
     // Create the window of the application with a stencil buffer
     sf::RenderWindow window(sf::VideoMode({600, 600}),
-                            sf::getRenderer() == sf::Renderer::Direct3D11 ? "SFML Stencil (Direct3D 11)" : "SFML Stencil (OpenGL)",
+                            sf::getRenderer() == sf::Renderer::Direct3D11 ? "SFML Stencil (Direct3D 11)"
+                            : sf::getRenderer() == sf::Renderer::Metal    ? "SFML Stencil (Metal)"
+                                                                          : "SFML Stencil (OpenGL)",
                             sf::Style::Titlebar | sf::Style::Close,
                             sf::State::Windowed,
                             sf::ContextSettings{0 /* depthBits */, 8 /* stencilBits */});
