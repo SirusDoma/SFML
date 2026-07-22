@@ -32,6 +32,7 @@
 
 #include <SFML/Window/WindowHandle.hpp>
 
+#include <chrono>
 #include <dxgi1_3.h>
 
 
@@ -127,9 +128,31 @@ private:
     [[nodiscard]] bool createViews(bool depthStencil);
 
     ////////////////////////////////////////////////////////////
+    /// \brief Watch whether v-synced flip presentation is actually paced
+    ///
+    /// A v-synced present cycle can never legitimately complete
+    /// faster than the display's refresh period. Broken driver
+    /// states exist that execute v-synced flip-model presents
+    /// immediately; when sustained impossibly fast cycles are
+    /// observed, the window falls back to the blit model, whose
+    /// pacing the compositor enforces.
+    ///
+    /// \param presentResult Result of the present call of this cycle
+    ///
+    ////////////////////////////////////////////////////////////
+    void monitorPresentationPacing(HRESULT presentResult);
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Replace the flip-model swap chain with a blit-model one
+    ///
+    ////////////////////////////////////////////////////////////
+    void fallBackToBlitPresentation();
+
+    ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
     D3D11GraphicsDevice&    m_device;                  //!< Graphics device presenting to the window
+    WindowHandle            m_handle{};                //!< Window the swap chain presents to
     ComPtr<IDXGISwapChain1> m_swapChain;               //!< Swap chain presenting to the window
     ComPtr<IDXGISwapChain2> m_swapChain2;              //!< 1.3 view of the swap chain, null without a waitable object
     HANDLE                  m_frameLatencyWaitable{};  //!< Signaled when the presentation queue has room, can be null
@@ -141,6 +164,9 @@ private:
     bool                           m_sRgb{};              //!< Whether the back buffer uses sRGB encoding
     bool                           m_flipModel{};         //!< Whether the swap chain presents through the flip model
     UINT                           m_swapChainFlags{};    //!< Flags the swap chain was created with
+
+    std::chrono::steady_clock::time_point m_lastPresentTime; //!< When the previous present cycle completed
+    unsigned int m_unsyncedPresentStreak{}; //!< Consecutive v-synced cycles that completed impossibly fast
 };
 
 } // namespace sf::priv

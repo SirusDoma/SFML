@@ -43,7 +43,8 @@ D3D11RenderWindowImpl::D3D11RenderWindowImpl(D3D11GraphicsDevice&          devic
                                              WindowHandle                  handle,
                                              const ContextSettings&        settings,
                                              [[maybe_unused]] unsigned int bitsPerPixel) :
-    m_device(device)
+    m_device(device),
+    m_handle(handle)
 {
     ID3D11Device* d3dDevice = m_device.getDevice();
     if (!d3dDevice)
@@ -93,9 +94,10 @@ D3D11RenderWindowImpl::D3D11RenderWindowImpl(D3D11GraphicsDevice&          devic
     }};
     // clang-format on
 
-    // The flip-model path is opt-in for now: some driver/VRR configurations execute
-    // v-synced windowed flip presents as immediate flips once the window is promoted
-    // to independent flip, running past the refresh rate with v-sync enabled
+    // The blit model behaves like classic swap chains everywhere, so it is the default;
+    // the flip model is chosen by an explicit low-latency request, and broken driver
+    // states that execute its v-synced presents without pacing are caught at runtime
+    // by monitorPresentationPacing, which falls back to the blit model
     const bool forceBlit = (samples > 1) || (settings.presentation != ContextSettings::Presentation::LowLatency);
 
     // Width and height are left zero so the buffers are sized from the window
@@ -179,7 +181,8 @@ void D3D11RenderWindowImpl::present()
 
     const bool tearing = m_flipModel && (m_syncInterval == 0) &&
                          ((m_swapChainFlags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) != 0);
-    d3dCheck(m_swapChain->Present(m_syncInterval, tearing ? DXGI_PRESENT_ALLOW_TEARING : 0));
+    const HRESULT presentResult = m_swapChain->Present(m_syncInterval, tearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
+    d3dCheck(presentResult);
 
     // Flip-model presentation unbinds the back buffer from the pipeline
     if (m_flipModel && (m_device.getCurrentRenderTargetView() == m_renderTargetView.Get()))
@@ -189,6 +192,105 @@ void D3D11RenderWindowImpl::present()
     // instead of inside a Present call issued after the frame was already rendered
     if (m_frameLatencyWaitable && (m_syncInterval > 0))
         WaitForSingleObjectEx(m_frameLatencyWaitable, 1000, FALSE);
+
+    monitorPresentationPacing(presentResult);
+}
+
+
+////////////////////////////////////////////////////////////
+void D3D11RenderWindowImpl::monitorPresentationPacing(HRESULT presentResult)
+{
+    const auto now      = std::chrono::steady_clock::now();
+    const auto previous = m_lastPresentTime;
+    m_lastPresentTime   = now;
+
+    // Only fully v-synced, visible flip-model cycles are meaningful; occluded windows
+    // present without pacing by design (Present reports them with a non-zero status)
+    if (!m_flipModel || (m_syncInterval == 0) || (presentResult != S_OK) ||
+        (previous == std::chrono::steady_clock::time_point{}))
+    {
+        m_unsyncedPresentStreak = 0;
+        return;
+    }
+
+    // No display refreshes fast enough to legitimately complete v-synced cycles this
+    // quickly, sustaining them means the driver is not pacing the presents
+    constexpr std::chrono::microseconds pacingFloor{1000};
+    if (now - previous >= pacingFloor)
+    {
+        m_unsyncedPresentStreak = 0;
+        return;
+    }
+
+    constexpr unsigned int unsyncedStreakLimit = 30;
+    if (++m_unsyncedPresentStreak < unsyncedStreakLimit)
+        return;
+
+    err() << "V-synced presentation is not being paced by the display driver, "
+             "falling back to the throughput presentation path"
+          << std::endl;
+    fallBackToBlitPresentation();
+}
+
+
+////////////////////////////////////////////////////////////
+void D3D11RenderWindowImpl::fallBackToBlitPresentation()
+{
+    ID3D11Device* d3dDevice = m_device.getDevice();
+    if (!d3dDevice)
+        return;
+
+    ComPtr<IDXGIDevice>   dxgiDevice;
+    ComPtr<IDXGIAdapter>  adapter;
+    ComPtr<IDXGIFactory2> factory;
+    if (!d3dCheck(d3dDevice->QueryInterface(IID_PPV_ARGS(&dxgiDevice))) ||
+        !d3dCheck(dxgiDevice->GetAdapter(&adapter)) || !d3dCheck(adapter->GetParent(IID_PPV_ARGS(&factory))))
+        return;
+
+    // The old back buffer disappears with its swap chain
+    const bool wasCurrent = m_renderTargetView && (m_device.getCurrentRenderTargetView() == m_renderTargetView.Get());
+    if (wasCurrent)
+        m_device.unbindSurface(m_renderTargetView.Get());
+
+    const bool hadDepthStencil = m_depthStencilView != nullptr;
+
+    if (m_frameLatencyWaitable)
+    {
+        CloseHandle(m_frameLatencyWaitable);
+        m_frameLatencyWaitable = nullptr;
+    }
+    m_swapChain2.Reset();
+    m_renderTargetView.Reset();
+    m_depthStencilTexture.Reset();
+    m_depthStencilView.Reset();
+    m_swapChain.Reset();
+
+    // The compositor paces blit-model presents itself, the broken pacing cannot recur.
+    // Flip-model windows are never multisampled, so no sample count carries over.
+    DXGI_SWAP_CHAIN_DESC1 swapChainDesc{};
+    swapChainDesc.Format           = m_sRgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
+    swapChainDesc.SampleDesc.Count = 1;
+    swapChainDesc.BufferUsage      = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    swapChainDesc.BufferCount      = 1;
+    swapChainDesc.SwapEffect       = DXGI_SWAP_EFFECT_DISCARD;
+    swapChainDesc.Scaling          = DXGI_SCALING_STRETCH;
+
+    if (!d3dCheck(factory->CreateSwapChainForHwnd(d3dDevice, m_handle, &swapChainDesc, nullptr, nullptr, &m_swapChain)))
+    {
+        err() << "Failed to create the fallback swap chain" << std::endl;
+        return;
+    }
+
+    m_flipModel      = false;
+    m_swapChainFlags = 0;
+
+    if (!createViews(hadDepthStencil))
+        return;
+
+    if (wasCurrent)
+        m_device.bindSurface(m_renderTargetView.Get(), m_depthStencilView.Get());
+
+    m_settings.presentation = ContextSettings::Presentation::Throughput;
 }
 
 
