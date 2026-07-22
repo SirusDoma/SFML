@@ -295,6 +295,11 @@ MetalTexturePtr MetalRenderWindowImpl::acquireReadableColorTexture()
     {
         m_device.flushPendingDraws();
         m_device.endEncoding(false);
+
+        // Another surface is current, the multisampled content still has to
+        // reach the drawable before it can be read
+        if (m_multisampleTexture && m_drawable)
+            m_device.resolvePass(m_multisampleTexture.get(), [m_drawable.get() texture]);
     }
 
     // A frame that never rendered has no drawable whose contents could be read
