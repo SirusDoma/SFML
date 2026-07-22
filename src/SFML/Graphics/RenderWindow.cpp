@@ -25,7 +25,6 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Graphics/GraphicsBackend.hpp>
 #include <SFML/Graphics/GraphicsDevice.hpp>
 #include <SFML/Graphics/Image.hpp>
 #include <SFML/Graphics/OpenGL/GLCheck.hpp>
@@ -33,6 +32,7 @@
 #include <SFML/Graphics/OpenGL/RenderTextureImplFBO.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Graphics/RenderWindowImpl.hpp>
+#include <SFML/Graphics/Renderer.hpp>
 
 #include <SFML/Window/VideoMode.hpp>
 
@@ -87,7 +87,7 @@ RenderWindow& RenderWindow::operator=(RenderWindow&&) noexcept = default;
 void RenderWindow::create(VideoMode mode, const String& title, std::uint32_t style, State state, const ContextSettings& settings)
 {
     // The RenderTarget constructor already locked the backend in
-    if (getGraphicsBackend() == GraphicsBackend::OpenGL)
+    if (getRenderer() == Renderer::OpenGL)
     {
         Window::create(mode, title, style, state, settings);
         return;
@@ -111,7 +111,7 @@ void RenderWindow::create(VideoMode mode, const String& title, State state, cons
 ////////////////////////////////////////////////////////////
 void RenderWindow::create(WindowHandle handle, const ContextSettings& settings)
 {
-    if (getGraphicsBackend() == GraphicsBackend::OpenGL)
+    if (getRenderer() == Renderer::OpenGL)
     {
         Window::create(handle, settings);
         return;
@@ -224,7 +224,7 @@ bool RenderWindow::setActive(bool active)
 ////////////////////////////////////////////////////////////
 void RenderWindow::onCreate()
 {
-    if (getGraphicsBackend() == GraphicsBackend::OpenGL)
+    if (getRenderer() == Renderer::OpenGL)
     {
         if (priv::RenderTextureImplFBO::isAvailable())
         {

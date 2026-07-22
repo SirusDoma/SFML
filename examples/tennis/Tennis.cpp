@@ -37,9 +37,13 @@ std::filesystem::path resourcesDir()
 ////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
-    // Use the Direct3D 11 backend when it is available, pass "gl" to force OpenGL
-    if (!(argc > 1 && std::string(argv[1]) == "gl") && !sf::setGraphicsBackend(sf::GraphicsBackend::Direct3D11))
-        std::cerr << "Direct3D 11 is not available, running on OpenGL instead" << std::endl;
+    // Use the Direct3D 11 renderer when it is available, pass "gl" to force OpenGL
+    if (!(argc > 1 && std::string(argv[1]) == "gl"))
+    {
+        sf::setRenderer(sf::Renderer::Direct3D11);
+        if (sf::getRenderer() != sf::Renderer::Direct3D11)
+            std::cerr << "Direct3D 11 is not available, running on OpenGL instead" << std::endl;
+    }
 
     std::random_device rd;
     std::mt19937       rng(rd());
@@ -52,8 +56,7 @@ int main(int argc, char* argv[])
 
     // Create the window of the application
     sf::RenderWindow window(sf::VideoMode({static_cast<unsigned int>(gameWidth), static_cast<unsigned int>(gameHeight)}, 32),
-                            sf::getGraphicsBackend() == sf::GraphicsBackend::Direct3D11 ? "SFML Tennis (Direct3D 11)"
-                                                                                        : "SFML Tennis (OpenGL)",
+                            sf::getRenderer() == sf::Renderer::Direct3D11 ? "SFML Tennis (Direct3D 11)" : "SFML Tennis (OpenGL)",
                             sf::Style::Titlebar | sf::Style::Close);
     window.setVerticalSyncEnabled(true);
 

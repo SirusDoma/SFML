@@ -292,8 +292,9 @@ private:
 ////////////////////////////////////////////////////////////
 int main()
 {
-    // Select the Direct3D 11 backend before any graphics resource is created
-    if (!sf::setGraphicsBackend(sf::GraphicsBackend::Direct3D11))
+    // Select the Direct3D 11 renderer before any graphics resource is created
+    sf::setRenderer(sf::Renderer::Direct3D11);
+    if (sf::getRenderer() != sf::Renderer::Direct3D11)
         std::cerr << "Direct3D 11 is not available, running on OpenGL without the raw Direct3D cube" << std::endl;
 
     bool exit = false;

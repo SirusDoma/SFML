@@ -25,9 +25,9 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Graphics/GraphicsBackend.hpp>
 #include <SFML/Graphics/GraphicsDevice.hpp>
 #include <SFML/Graphics/OpenGL/GlGraphicsDevice.hpp>
+#include <SFML/Graphics/Renderer.hpp>
 
 #ifdef SFML_ENABLE_D3D11
 #include <SFML/Graphics/D3D11/D3D11GraphicsDevice.hpp>
@@ -35,6 +35,7 @@
 
 #include <SFML/System/Err.hpp>
 
+#include <algorithm>
 #include <memory>
 #include <mutex>
 #include <ostream>
@@ -44,7 +45,7 @@
 
 namespace
 {
-// Mutex to protect device creation, lookup and backend selection
+// Mutex to protect device creation, lookup and renderer selection
 std::mutex& getGraphicsDeviceMutex()
 {
     static std::mutex mutex;
@@ -57,11 +58,11 @@ std::weak_ptr<sf::priv::GraphicsDevice>& getWeakGraphicsDevice()
     return weakDevice;
 }
 
-// Backend used to create the device, changeable until a device exists
-sf::GraphicsBackend& getPendingGraphicsBackend()
+// Renderer used to create the device, changeable until a device exists
+sf::Renderer& getPendingRenderer()
 {
-    static sf::GraphicsBackend backend = sf::GraphicsBackend::OpenGL;
-    return backend;
+    static sf::Renderer renderer = sf::Renderer::OpenGL;
+    return renderer;
 }
 } // namespace
 
@@ -78,16 +79,16 @@ std::shared_ptr<GraphicsDevice> ensureGraphicsDevice()
 
     if (!device)
     {
-        switch (getPendingGraphicsBackend())
+        switch (getPendingRenderer())
         {
-            case GraphicsBackend::OpenGL:
+            case Renderer::OpenGL:
                 device = std::make_shared<GlGraphicsDevice>();
                 break;
-            case GraphicsBackend::Direct3D11:
+            case Renderer::Direct3D11:
 #ifdef SFML_ENABLE_D3D11
                 device = std::make_shared<D3D11GraphicsDevice>();
 #else
-                // Unreachable, setGraphicsBackend only accepts compiled-in backends
+                // Unreachable, setRenderer only accepts compiled-in backends
                 assert(false && "The Direct3D 11 backend is not compiled in");
 #endif
                 break;
@@ -114,59 +115,57 @@ GraphicsDevice* getGraphicsDevice()
 namespace sf
 {
 ////////////////////////////////////////////////////////////
-bool setGraphicsBackend(GraphicsBackend backend)
+void setRenderer(Renderer renderer)
 {
-    if (!isGraphicsBackendAvailable(backend))
+    if (!isRendererAvailable(renderer))
     {
-        err() << "Failed to select graphics backend, it is not available on this system" << std::endl;
-        return false;
+        err() << "Failed to select renderer, it is not available on this system" << std::endl;
+        return;
     }
 
     const std::lock_guard lock(getGraphicsDeviceMutex());
 
     if (const auto device = getWeakGraphicsDevice().lock())
     {
-        if (device->getBackend() == backend)
-            return true;
-
-        err() << "Failed to select graphics backend, another backend is already in use" << std::endl;
-        return false;
+        if (device->getRenderer() != renderer)
+            err() << "Failed to select renderer, another renderer is already in use" << std::endl;
+        return;
     }
 
-    getPendingGraphicsBackend() = backend;
-
-    return true;
+    getPendingRenderer() = renderer;
 }
 
 
 ////////////////////////////////////////////////////////////
-GraphicsBackend getGraphicsBackend()
+Renderer getRenderer()
 {
     const std::lock_guard lock(getGraphicsDeviceMutex());
 
     if (const auto device = getWeakGraphicsDevice().lock())
-        return device->getBackend();
+        return device->getRenderer();
 
-    return getPendingGraphicsBackend();
+    return getPendingRenderer();
 }
 
 
 ////////////////////////////////////////////////////////////
-bool isGraphicsBackendAvailable(GraphicsBackend backend)
+std::vector<Renderer> getAvailableRenderers()
 {
-    switch (backend)
-    {
-        case GraphicsBackend::OpenGL:
-            return true;
-        case GraphicsBackend::Direct3D11:
+    return {
+        Renderer::OpenGL,
 #ifdef SFML_ENABLE_D3D11
-            return true;
-#else
-            return false;
+        Renderer::Direct3D11,
 #endif
-    }
+    };
+}
 
-    return false;
+
+////////////////////////////////////////////////////////////
+bool isRendererAvailable(Renderer renderer)
+{
+    const auto available = getAvailableRenderers();
+
+    return std::find(available.begin(), available.end(), renderer) != available.end();
 }
 
 
@@ -178,7 +177,7 @@ ShadingLanguage getShadingLanguage()
     if (const auto device = getWeakGraphicsDevice().lock())
         return device->getShadingLanguage();
 
-    return getPendingGraphicsBackend() == GraphicsBackend::OpenGL ? ShadingLanguage::Glsl : ShadingLanguage::Hlsl;
+    return getPendingRenderer() == Renderer::OpenGL ? ShadingLanguage::Glsl : ShadingLanguage::Hlsl;
 }
 
 } // namespace sf

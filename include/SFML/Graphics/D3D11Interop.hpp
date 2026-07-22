@@ -207,6 +207,6 @@ SFML_GRAPHICS_API void resetStates(RenderTarget& target);
 /// call `resetStates` before drawing with SFML again.
 ///
 /// These functions only have an effect while the Direct3D 11
-/// backend is active (see `sf::setGraphicsBackend`).
+/// renderer is active (see `sf::setRenderer`).
 ///
 ////////////////////////////////////////////////////////////

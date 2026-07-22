@@ -170,12 +170,12 @@ public:
     [[nodiscard]] bool isVertexBufferAvailable() override;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Get the backend this device renders through
+    /// \brief Get the renderer this device renders through
     ///
-    /// \return The graphics backend
+    /// \return The renderer
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] GraphicsBackend getBackend() const override;
+    [[nodiscard]] Renderer getRenderer() const override;
 
     ////////////////////////////////////////////////////////////
     /// \brief Get the shading language this backend consumes

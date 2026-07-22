@@ -55,8 +55,9 @@ LRESULT CALLBACK onEvent(HWND handle, UINT message, WPARAM wParam, LPARAM lParam
 ////////////////////////////////////////////////////////////
 int main()
 {
-    // Use the Direct3D 11 backend when it is available
-    if (!sf::setGraphicsBackend(sf::GraphicsBackend::Direct3D11))
+    // Use the Direct3D 11 renderer when it is available
+    sf::setRenderer(sf::Renderer::Direct3D11);
+    if (sf::getRenderer() != sf::Renderer::Direct3D11)
         std::cerr << "Direct3D 11 is not available, running on OpenGL instead" << std::endl;
 
     HINSTANCE instance = GetModuleHandle(nullptr);
@@ -76,9 +77,8 @@ int main()
     RegisterClass(&windowClass);
 
     // Create the main window
-    const auto* title = sf::getGraphicsBackend() == sf::GraphicsBackend::Direct3D11
-                            ? TEXT("SFML Win32 (Direct3D 11)")
-                            : TEXT("SFML Win32 (OpenGL)");
+    const auto* title = sf::getRenderer() == sf::Renderer::Direct3D11 ? TEXT("SFML Win32 (Direct3D 11)")
+                                                                      : TEXT("SFML Win32 (OpenGL)");
 
     HWND window = CreateWindow(TEXT("SFML App"), title, WS_SYSMENU | WS_VISIBLE, 200, 200, 660, 520, nullptr, nullptr, instance, nullptr);
 

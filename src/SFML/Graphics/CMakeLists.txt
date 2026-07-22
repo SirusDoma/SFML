@@ -17,7 +17,7 @@ set(SRC
     ${INCROOT}/Glsl.hpp
     ${INCROOT}/Glsl.inl
     ${INCROOT}/Glyph.hpp
-    ${INCROOT}/GraphicsBackend.hpp
+    ${INCROOT}/Renderer.hpp
     ${SRCROOT}/GraphicsDevice.cpp
     ${SRCROOT}/GraphicsDevice.hpp
     ${SRCROOT}/Image.cpp

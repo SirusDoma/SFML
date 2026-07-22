@@ -127,9 +127,9 @@ bool GlGraphicsDevice::isVertexBufferAvailable()
 
 
 ////////////////////////////////////////////////////////////
-GraphicsBackend GlGraphicsDevice::getBackend() const
+Renderer GlGraphicsDevice::getRenderer() const
 {
-    return GraphicsBackend::OpenGL;
+    return Renderer::OpenGL;
 }
 
 

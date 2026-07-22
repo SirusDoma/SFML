@@ -250,7 +250,7 @@ void bind(const T* resource)
 /// raw OpenGL calls.
 ///
 /// These functions only have an effect while the OpenGL
-/// backend is active (see `sf::setGraphicsBackend`), on other
-/// backends they do nothing.
+/// renderer is active (see `sf::setRenderer`), on other
+/// renderers they do nothing.
 ///
 ////////////////////////////////////////////////////////////

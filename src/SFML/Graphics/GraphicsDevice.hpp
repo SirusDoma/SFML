@@ -27,7 +27,7 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Graphics/GraphicsBackend.hpp>
+#include <SFML/Graphics/Renderer.hpp>
 
 #include <SFML/Window/WindowHandle.hpp>
 
@@ -183,12 +183,12 @@ public:
     [[nodiscard]] virtual bool isVertexBufferAvailable() = 0;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Get the backend this device renders through
+    /// \brief Get the renderer this device renders through
     ///
-    /// \return The graphics backend
+    /// \return The renderer
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] virtual GraphicsBackend getBackend() const = 0;
+    [[nodiscard]] virtual Renderer getRenderer() const = 0;
 
     ////////////////////////////////////////////////////////////
     /// \brief Get the shading language this backend consumes

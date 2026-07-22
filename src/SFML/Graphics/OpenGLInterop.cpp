@@ -25,13 +25,13 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Graphics/GraphicsBackend.hpp>
 #include <SFML/Graphics/OpenGL/GlShaderImpl.hpp>
 #include <SFML/Graphics/OpenGL/GlTextureImpl.hpp>
 #include <SFML/Graphics/OpenGL/GlVertexBufferImpl.hpp>
 #include <SFML/Graphics/OpenGLInterop.hpp>
 #include <SFML/Graphics/RenderTarget.hpp>
 #include <SFML/Graphics/RenderTargetImpl.hpp>
+#include <SFML/Graphics/Renderer.hpp>
 
 
 namespace sf::OpenGL
@@ -65,7 +65,7 @@ void resetStates(RenderTarget& target)
 ////////////////////////////////////////////////////////////
 void bindTexture(const Texture* texture, CoordinateType coordinateType)
 {
-    if (getGraphicsBackend() != GraphicsBackend::OpenGL)
+    if (getRenderer() != Renderer::OpenGL)
         return;
 
     priv::GlTextureImpl::bind(texture, coordinateType);
@@ -75,7 +75,7 @@ void bindTexture(const Texture* texture, CoordinateType coordinateType)
 ////////////////////////////////////////////////////////////
 void bindShader(const Shader* shader)
 {
-    if (getGraphicsBackend() != GraphicsBackend::OpenGL)
+    if (getRenderer() != Renderer::OpenGL)
         return;
 
     priv::GlShaderImpl::bind(shader);
@@ -85,7 +85,7 @@ void bindShader(const Shader* shader)
 ////////////////////////////////////////////////////////////
 void bindVertexBuffer(const VertexBuffer* vertexBuffer)
 {
-    if (getGraphicsBackend() != GraphicsBackend::OpenGL)
+    if (getRenderer() != Renderer::OpenGL)
         return;
 
     priv::GlVertexBufferImpl::bind(vertexBuffer);

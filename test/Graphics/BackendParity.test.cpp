@@ -1,9 +1,9 @@
 #include <SFML/Graphics/CircleShape.hpp>
-#include <SFML/Graphics/GraphicsBackend.hpp>
 #include <SFML/Graphics/Image.hpp>
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <SFML/Graphics/RenderTexture.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
+#include <SFML/Graphics/Renderer.hpp>
 #include <SFML/Graphics/Shader.hpp>
 #include <SFML/Graphics/Sprite.hpp>
 #include <SFML/Graphics/StencilMode.hpp>
@@ -27,9 +27,8 @@ namespace
 bool selectBackend()
 {
 #ifdef SFML_TEST_BACKEND_D3D11
-    static const bool selected = sf::setGraphicsBackend(sf::GraphicsBackend::Direct3D11) ||
-                                 (sf::getGraphicsBackend() == sf::GraphicsBackend::Direct3D11);
-    return selected;
+    sf::setRenderer(sf::Renderer::Direct3D11);
+    return sf::getRenderer() == sf::Renderer::Direct3D11;
 #else
     return true;
 #endif

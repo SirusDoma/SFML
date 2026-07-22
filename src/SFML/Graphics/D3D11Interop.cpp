@@ -26,9 +26,9 @@
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Graphics/D3D11Interop.hpp>
-#include <SFML/Graphics/GraphicsBackend.hpp>
 #include <SFML/Graphics/GraphicsDevice.hpp>
 #include <SFML/Graphics/RenderTargetImpl.hpp>
+#include <SFML/Graphics/Renderer.hpp>
 
 #ifdef SFML_ENABLE_D3D11
 #include <SFML/Graphics/D3D11/D3D11GraphicsDevice.hpp>
@@ -53,7 +53,7 @@ struct ImplAccess : sf::priv::RenderTargetImpl
 sf::priv::D3D11GraphicsDevice* getD3d11Device()
 {
     auto* device = sf::priv::getGraphicsDevice();
-    if (!device || (device->getBackend() != sf::GraphicsBackend::Direct3D11))
+    if (!device || (device->getRenderer() != sf::Renderer::Direct3D11))
         return nullptr;
 
     return static_cast<sf::priv::D3D11GraphicsDevice*>(device);

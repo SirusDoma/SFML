@@ -297,9 +297,9 @@ unsigned int D3D11GraphicsDevice::getMaximumAntiAliasingLevel()
 
 
 ////////////////////////////////////////////////////////////
-GraphicsBackend D3D11GraphicsDevice::getBackend() const
+Renderer D3D11GraphicsDevice::getRenderer() const
 {
-    return GraphicsBackend::Direct3D11;
+    return Renderer::Direct3D11;
 }
 
 

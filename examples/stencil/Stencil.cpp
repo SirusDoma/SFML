@@ -18,14 +18,17 @@
 ////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
-    // Use the Direct3D 11 backend when it is available, pass "gl" to force OpenGL
-    if (!(argc > 1 && std::string(argv[1]) == "gl") && !sf::setGraphicsBackend(sf::GraphicsBackend::Direct3D11))
-        std::cerr << "Direct3D 11 is not available, running on OpenGL instead" << std::endl;
+    // Use the Direct3D 11 renderer when it is available, pass "gl" to force OpenGL
+    if (!(argc > 1 && std::string(argv[1]) == "gl"))
+    {
+        sf::setRenderer(sf::Renderer::Direct3D11);
+        if (sf::getRenderer() != sf::Renderer::Direct3D11)
+            std::cerr << "Direct3D 11 is not available, running on OpenGL instead" << std::endl;
+    }
 
     // Create the window of the application with a stencil buffer
     sf::RenderWindow window(sf::VideoMode({600, 600}),
-                            sf::getGraphicsBackend() == sf::GraphicsBackend::Direct3D11 ? "SFML Stencil (Direct3D 11)"
-                                                                                        : "SFML Stencil (OpenGL)",
+                            sf::getRenderer() == sf::Renderer::Direct3D11 ? "SFML Stencil (Direct3D 11)" : "SFML Stencil (OpenGL)",
                             sf::Style::Titlebar | sf::Style::Close,
                             sf::State::Windowed,
                             sf::ContextSettings{0 /* depthBits */, 8 /* stencilBits */});

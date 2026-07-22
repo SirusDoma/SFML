@@ -29,18 +29,20 @@
 ////////////////////////////////////////////////////////////
 #include <SFML/Graphics/Export.hpp>
 
+#include <vector>
+
 
 namespace sf
 {
 ////////////////////////////////////////////////////////////
-/// \brief Renderer backends the graphics module can use
+/// \brief Renderers the graphics module can use
 ///
-/// The availability of a backend depends on the platform and
+/// The availability of a renderer depends on the platform and
 /// the options SFML was built with, query it with
-/// `sf::isGraphicsBackendAvailable`.
+/// `sf::getAvailableRenderers`.
 ///
 ////////////////////////////////////////////////////////////
-enum class GraphicsBackend
+enum class Renderer
 {
     OpenGL,    //!< OpenGL renderer, available on all platforms
     Direct3D11 //!< Direct3D 11 renderer, only available on Windows
@@ -52,65 +54,76 @@ enum class GraphicsBackend
 ////////////////////////////////////////////////////////////
 enum class ShadingLanguage
 {
-    Glsl, //!< OpenGL Shading Language, consumed by the OpenGL backend
-    Hlsl  //!< High-Level Shading Language, consumed by the Direct3D 11 backend
+    Glsl, //!< OpenGL Shading Language, consumed by the OpenGL renderer
+    Hlsl  //!< High-Level Shading Language, consumed by the Direct3D 11 renderer
 };
 
 ////////////////////////////////////////////////////////////
-/// \brief Select the renderer backend used by the graphics module
+/// \brief Select the renderer used by the graphics module
 ///
-/// The backend must be selected before the first graphics
+/// The renderer must be selected before the first graphics
 /// resource (window, texture, shader, ...) is created. Once a
-/// resource exists the backend is locked in and can no longer
-/// be changed; calling this function then fails, unless the
-/// requested backend is the one already in use.
+/// resource exists the renderer is locked in and can no longer
+/// be changed.
 ///
-/// The default backend is `sf::GraphicsBackend::OpenGL`.
+/// If the requested renderer is unavailable or another renderer
+/// is already locked in, an error is written to `sf::err()` and
+/// the selection is left unchanged; check `getRenderer` to see
+/// which renderer is in use.
 ///
-/// \param backend Backend to use for all subsequent rendering
+/// The default renderer is `sf::Renderer::OpenGL`.
 ///
-/// \return `true` if the backend was selected, `false` if it is
-///         unavailable or another backend is already in use
+/// \param renderer Renderer to use for all subsequent rendering
 ///
-/// \see `getGraphicsBackend`, `isGraphicsBackendAvailable`
+/// \see `getRenderer`, `getAvailableRenderers`
 ///
 ////////////////////////////////////////////////////////////
-[[nodiscard]] SFML_GRAPHICS_API bool setGraphicsBackend(GraphicsBackend backend);
+SFML_GRAPHICS_API void setRenderer(Renderer renderer);
 
 ////////////////////////////////////////////////////////////
-/// \brief Get the renderer backend the graphics module uses
+/// \brief Get the renderer the graphics module uses
 ///
-/// Returns the active backend, or the pending selection if no
+/// Returns the active renderer, or the pending selection if no
 /// graphics resource has been created yet.
 ///
-/// \return The graphics backend
+/// \return The renderer
 ///
-/// \see `setGraphicsBackend`
+/// \see `setRenderer`
 ///
 ////////////////////////////////////////////////////////////
-[[nodiscard]] SFML_GRAPHICS_API GraphicsBackend getGraphicsBackend();
+[[nodiscard]] SFML_GRAPHICS_API Renderer getRenderer();
 
 ////////////////////////////////////////////////////////////
-/// \brief Check whether a renderer backend is available
+/// \brief Get the renderers available on this system
 ///
-/// \param backend Backend to check
+/// \return All renderers that can be selected, in no particular order
 ///
-/// \return `true` if the backend can be selected on this system
-///
-/// \see `setGraphicsBackend`
+/// \see `setRenderer`, `isRendererAvailable`
 ///
 ////////////////////////////////////////////////////////////
-[[nodiscard]] SFML_GRAPHICS_API bool isGraphicsBackendAvailable(GraphicsBackend backend);
+[[nodiscard]] SFML_GRAPHICS_API std::vector<Renderer> getAvailableRenderers();
+
+////////////////////////////////////////////////////////////
+/// \brief Check whether a renderer is available on this system
+///
+/// \param renderer Renderer to check
+///
+/// \return `true` if the renderer can be selected with `setRenderer`
+///
+/// \see `setRenderer`, `getAvailableRenderers`
+///
+////////////////////////////////////////////////////////////
+[[nodiscard]] SFML_GRAPHICS_API bool isRendererAvailable(Renderer renderer);
 
 ////////////////////////////////////////////////////////////
 /// \brief Get the shading language consumed by `sf::Shader`
 ///
 /// Use this to decide which shader sources to load when
-/// supporting multiple backends.
+/// supporting multiple renderers.
 ///
-/// \return The shading language of the graphics backend
+/// \return The shading language of the renderer
 ///
-/// \see `setGraphicsBackend`
+/// \see `setRenderer`
 ///
 ////////////////////////////////////////////////////////////
 [[nodiscard]] SFML_GRAPHICS_API ShadingLanguage getShadingLanguage();
@@ -122,24 +135,25 @@ enum class ShadingLanguage
 /// \file
 /// \ingroup graphics
 ///
-/// The graphics module can render through different backends.
+/// The graphics module can render through different renderers.
 /// OpenGL is the default and is always available; additional
-/// backends depend on the platform and build options.
+/// renderers depend on the platform and build options.
 ///
-/// The backend has to be chosen up front, before any graphics
+/// The renderer has to be chosen up front, before any graphics
 /// resource is created:
 /// \code
-/// if (!sf::setGraphicsBackend(sf::GraphicsBackend::Direct3D11))
+/// sf::setRenderer(sf::Renderer::Direct3D11);
+/// if (sf::getRenderer() != sf::Renderer::Direct3D11)
 /// {
 ///     // Direct3D 11 not available, OpenGL remains selected
 /// }
 ///
-/// sf::RenderWindow window(sf::VideoMode({640, 480}), "Backend demo");
+/// sf::RenderWindow window(sf::VideoMode({640, 480}), "Renderer demo");
 /// \endcode
 ///
 /// Note that the raw OpenGL interoperability functions in the
 /// `sf::OpenGL` namespace (saving and restoring states, binding
 /// resources for direct OpenGL use) only have an effect when
-/// the OpenGL backend is active.
+/// the OpenGL renderer is active.
 ///
 ////////////////////////////////////////////////////////////
