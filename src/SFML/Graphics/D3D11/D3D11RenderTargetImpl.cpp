@@ -155,9 +155,7 @@ void D3D11RenderTargetImpl::clearStencil(RenderTarget& target, StencilValue sten
 {
     const D3D11GraphicsDevice::ContextLock lock(m_device);
 
-    auto* context          = m_device.getContext();
-    auto* depthStencilView = m_device.getCurrentDepthStencilView();
-    if (!context)
+    if (!m_device.getContext())
         return;
 
     m_device.flushPendingDraws();
@@ -166,8 +164,7 @@ void D3D11RenderTargetImpl::clearStencil(RenderTarget& target, StencilValue sten
     if (!cache.enable || cache.viewChanged)
         applyCurrentView(target);
 
-    if (depthStencilView)
-        context->ClearDepthStencilView(depthStencilView, D3D11_CLEAR_STENCIL, 1.f, static_cast<UINT8>(stencilValue.value));
+    clearStencilValue(target, stencilValue);
 }
 
 
@@ -178,10 +175,75 @@ void D3D11RenderTargetImpl::clear(RenderTarget& target, Color color, StencilValu
 
     const D3D11GraphicsDevice::ContextLock lock(m_device);
 
+    if (!m_device.getContext())
+        return;
+
+    clearStencilValue(target, stencilValue);
+}
+
+
+////////////////////////////////////////////////////////////
+void D3D11RenderTargetImpl::clearStencilValue(RenderTarget& target, StencilValue stencilValue)
+{
     auto* context          = m_device.getContext();
     auto* depthStencilView = m_device.getCurrentDepthStencilView();
-    if (context && depthStencilView)
+    if (!depthStencilView)
+        return;
+
+    if (!getCache(target).scissorEnabled)
+    {
         context->ClearDepthStencilView(depthStencilView, D3D11_CLEAR_STENCIL, 1.f, static_cast<UINT8>(stencilValue.value));
+        return;
+    }
+
+    // ClearDepthStencilView has no rectangle variant on any Direct3D version, a scissored
+    // clear writes the value with a stencil-only quad the scissor rectangle clips
+    const Vector2u size         = target.getSize();
+    const IntRect  pixelScissor = target.getScissor(target.getView());
+
+    D3D11_VIEWPORT viewport{};
+    viewport.Width    = static_cast<float>(size.x);
+    viewport.Height   = static_cast<float>(size.y);
+    viewport.MaxDepth = 1.f;
+
+    D3D11_RECT rect{};
+    rect.left   = pixelScissor.position.x;
+    rect.top    = pixelScissor.position.y;
+    rect.right  = pixelScissor.position.x + pixelScissor.size.x;
+    rect.bottom = pixelScissor.position.y + pixelScissor.size.y;
+
+    // Identity matrices pass the quad through to clip space, covering the whole viewport
+    std::array<float, 48> constants{};
+    for (std::size_t matrix = 0; matrix < 3; ++matrix)
+        for (std::size_t diagonal = 0; diagonal < 4; ++diagonal)
+            constants[(matrix * 16) + (diagonal * 5)] = 1.f;
+
+    const StencilMode stencilMode{StencilComparison::Always, StencilUpdateOperation::Replace, stencilValue, 0xFF, true};
+
+    m_device.setPendingUserShader(nullptr, 0);
+    m_device.setPendingBlendState(m_device.getBlendState(BlendMode(), false));
+    m_device.setPendingDepthStencilState(m_device.getDepthStencilState(stencilMode), stencilValue.value);
+    m_device.setPendingRasterizerState(m_device.getRasterizerState(true));
+    m_device.setPendingViewport(viewport);
+    m_device.setPendingScissorRect(rect);
+    m_device.setPendingConstants(constants);
+    m_device.applyPendingState();
+
+    const std::array<Vertex, 6> quad = {
+        {{{-1.f, -1.f}}, {{1.f, -1.f}}, {{1.f, 1.f}}, {{-1.f, -1.f}}, {{1.f, 1.f}}, {{-1.f, 1.f}}}};
+
+    std::size_t firstVertex = 0;
+    if (!m_device.uploadVertices(quad.data(), quad.size(), firstVertex))
+        return;
+
+    m_device.bindVertexBuffer(m_device.getStreamVertexBuffer());
+    m_device.bindTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    context->Draw(static_cast<UINT>(quad.size()), static_cast<UINT>(firstVertex));
+
+    // The quad bypassed the state caches, the next draw has to re-record everything
+    auto& cache       = getCache(target);
+    cache.enable      = false;
+    cache.viewChanged = true;
 }
 
 

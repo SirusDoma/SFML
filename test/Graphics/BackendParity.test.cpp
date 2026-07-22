@@ -341,6 +341,34 @@ TEST_CASE("[Graphics] Backend rendering parity", runDisplayTests())
         CHECK(image.getPixel({75, 50}) == sf::Color::Black);
     }
 
+    SECTION("Scissored stencil clear")
+    {
+        sf::RenderTexture stencilTarget(sf::Vector2u(100, 100), sf::ContextSettings{0, 8});
+        stencilTarget.clear(sf::Color::Black, 0);
+
+        // Stamp the whole stencil buffer to 1 without touching the colors
+        sf::RectangleShape stamp({100, 100});
+        stencilTarget.draw(stamp,
+                           sf::StencilMode{sf::StencilComparison::Always, sf::StencilUpdateOperation::Replace, 1, 0xFF, true});
+
+        // Clear only the left half of the stencil buffer back to 0
+        sf::View view = stencilTarget.getDefaultView();
+        view.setScissor(sf::FloatRect({0, 0}, {0.5f, 1}));
+        stencilTarget.setView(view);
+        stencilTarget.clearStencil(0);
+        stencilTarget.setView(stencilTarget.getDefaultView());
+
+        // Draw everywhere, visible only where the stencil kept its 1
+        sf::RectangleShape fill({100, 100});
+        fill.setFillColor(sf::Color::Green);
+        stencilTarget.draw(fill,
+                           sf::StencilMode{sf::StencilComparison::Equal, sf::StencilUpdateOperation::Keep, 1, 0xFF, false});
+
+        const sf::Image image = render(stencilTarget);
+        CHECK(image.getPixel({25, 50}) == sf::Color::Black);
+        CHECK(image.getPixel({75, 50}) == sf::Color::Green);
+    }
+
     SECTION("Fragment shader tint")
     {
         sf::Shader shader;

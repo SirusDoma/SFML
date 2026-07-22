@@ -220,6 +220,19 @@ private:
     void setPendingConstants();
 
     ////////////////////////////////////////////////////////////
+    /// \brief Clear the stencil buffer honoring the scissor rectangle
+    ///
+    /// Direct3D has no rectangle-clear for stencil buffers, a
+    /// scissored clear writes the value with a stencil-only quad
+    /// the scissor rectangle clips.
+    ///
+    /// \param target       Render target whose stencil buffer to clear
+    /// \param stencilValue Stencil value to clear to
+    ///
+    ////////////////////////////////////////////////////////////
+    void clearStencilValue(RenderTarget& target, StencilValue stencilValue);
+
+    ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
     D3D11GraphicsDevice& m_device; //!< Device this render target renders through
