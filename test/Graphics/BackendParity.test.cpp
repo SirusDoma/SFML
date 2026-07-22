@@ -369,6 +369,29 @@ TEST_CASE("[Graphics] Backend rendering parity", runDisplayTests())
         CHECK(image.getPixel({75, 50}) == sf::Color::Green);
     }
 
+    SECTION("Scissored combined clear")
+    {
+        sf::RenderTexture stencilTarget(sf::Vector2u(100, 100), sf::ContextSettings{0, 8});
+        stencilTarget.clear(sf::Color::Black, 0);
+
+        // Clear only the left half to red with a stencil of 1
+        sf::View view = stencilTarget.getDefaultView();
+        view.setScissor(sf::FloatRect({0, 0}, {0.5f, 1}));
+        stencilTarget.setView(view);
+        stencilTarget.clear(sf::Color::Red, 1);
+        stencilTarget.setView(stencilTarget.getDefaultView());
+
+        // Draw everywhere, visible only where the combined clear stamped its 1
+        sf::RectangleShape fill({100, 100});
+        fill.setFillColor(sf::Color::Green);
+        stencilTarget.draw(fill,
+                           sf::StencilMode{sf::StencilComparison::Equal, sf::StencilUpdateOperation::Keep, 1, 0xFF, false});
+
+        const sf::Image image = render(stencilTarget);
+        CHECK(image.getPixel({25, 50}) == sf::Color::Green);
+        CHECK(image.getPixel({75, 50}) == sf::Color::Black);
+    }
+
     SECTION("Fragment shader tint")
     {
         sf::Shader shader;

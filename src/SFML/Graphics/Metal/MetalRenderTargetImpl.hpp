@@ -222,10 +222,12 @@ private:
     /// \brief Clear the scissor region by drawing a quad
     ///
     /// A load action clears the whole attachment, scissored
-    /// clears draw a full-target quad the scissor rectangle clips.
+    /// clears draw a full-target quad the scissor rectangle
+    /// clips, writing the color, the stencil value, or both in
+    /// a single draw.
     ///
     ////////////////////////////////////////////////////////////
-    void clearWithQuad(RenderTarget& target, Color color);
+    void clearWithQuad(RenderTarget& target, Color color, bool colorWrite, bool stencilWrite, StencilValue stencilValue);
 
     ////////////////////////////////////////////////////////////
     // Member data

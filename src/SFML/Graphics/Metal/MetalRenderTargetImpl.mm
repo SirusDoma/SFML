@@ -117,7 +117,7 @@ void MetalRenderTargetImpl::clear(RenderTarget& target, Color color)
     // scissored clears draw a quad the scissor rectangle clips
     if (cache.scissorEnabled)
     {
-        clearWithQuad(target, color);
+        clearWithQuad(target, color, true, false, StencilValue{0});
         return;
     }
 
@@ -139,19 +139,37 @@ void MetalRenderTargetImpl::clearStencil(RenderTarget& target, StencilValue sten
     if (!cache.enable || cache.viewChanged)
         applyCurrentView(target);
 
-    m_device.setPendingClearStencil(static_cast<std::uint8_t>(stencilValue.value));
+    if (cache.scissorEnabled)
+        clearWithQuad(target, Color(), false, true, stencilValue);
+    else
+        m_device.setPendingClearStencil(static_cast<std::uint8_t>(stencilValue.value));
 }
 
 
 ////////////////////////////////////////////////////////////
 void MetalRenderTargetImpl::clear(RenderTarget& target, Color color, StencilValue stencilValue)
 {
-    clear(target, color);
-
     const MetalGraphicsDevice::ContextLock lock(m_device);
 
-    if (m_device.getCurrentSurface())
-        m_device.setPendingClearStencil(static_cast<std::uint8_t>(stencilValue.value));
+    if (!m_device.getCurrentSurface())
+        return;
+
+    m_device.flushPendingDraws();
+
+    const auto& cache = getCache(target);
+    if (!cache.enable || cache.viewChanged)
+        applyCurrentView(target);
+
+    // Both halves are quads on Metal, unlike Direct3D 11 a single draw can
+    // write the color and the stencil value together
+    if (cache.scissorEnabled)
+    {
+        clearWithQuad(target, color, true, true, stencilValue);
+        return;
+    }
+
+    m_device.setPendingClearColor(color);
+    m_device.setPendingClearStencil(static_cast<std::uint8_t>(stencilValue.value));
 }
 
 
@@ -543,52 +561,65 @@ void MetalRenderTargetImpl::setPendingConstants()
 
 
 ////////////////////////////////////////////////////////////
-void MetalRenderTargetImpl::clearWithQuad(RenderTarget& target, Color color)
+void MetalRenderTargetImpl::clearWithQuad(RenderTarget& target, Color color, bool colorWrite, bool stencilWrite, StencilValue stencilValue)
 {
-    const auto& cache = getCache(target);
+    // The quad covers the whole target in clip space and the scissor rectangle
+    // clips it; the viewport has to cover the whole target so the quad reaches
+    // scissor regions outside of the view's viewport
+    const Vector2u size         = target.getSize();
+    const IntRect  pixelScissor = target.getScissor(target.getView());
 
-    // Draw an untextured full-target quad in clip space with blending off, the
-    // scissor rectangle clips it; the viewport has to cover the whole target so
-    // the quad reaches scissor regions outside of the view's viewport
-    const MetalTexturePtr      savedTexture = m_device.getCurrentTextureView();
-    const MetalSamplerStatePtr savedSampler = m_device.getCurrentTextureSampler();
+    MetalViewport viewport;
+    viewport.width  = size.x;
+    viewport.height = size.y;
 
-    MetalViewport fullViewport;
-    fullViewport.width  = target.getSize().x;
-    fullViewport.height = target.getSize().y;
-    m_device.setPendingViewport(fullViewport);
+    MetalScissor rect;
+    rect.x      = static_cast<std::uint32_t>(std::max(pixelScissor.position.x, 0));
+    rect.y      = static_cast<std::uint32_t>(std::max(pixelScissor.position.y, 0));
+    rect.width  = static_cast<std::uint32_t>(std::max(pixelScissor.size.x, 0));
+    rect.height = static_cast<std::uint32_t>(std::max(pixelScissor.size.y, 0));
 
-    m_device.setPendingBlendMode(BlendNone, true);
-    m_device.setPendingDepthStencilState(m_device.getDepthStencilState(StencilMode()), 0);
-    m_device.setPendingTexture(m_device.getWhiteTexture(), m_device.getSamplerState(false, false));
-    m_device.setPendingUserShader(nullptr, 0);
-
+    // Identity matrices pass the quad through to clip space, covering the whole viewport
     std::array<float, 48> constants{};
-    std::memcpy(constants.data(), identityMatrix.data(), sizeof(float) * 16);
-    std::memcpy(constants.data() + 16, identityMatrix.data(), sizeof(float) * 16);
-    std::memcpy(constants.data() + 32, identityMatrix.data(), sizeof(float) * 16);
+    for (std::size_t matrix = 0; matrix < 3; ++matrix)
+        for (std::size_t diagonal = 0; diagonal < 4; ++diagonal)
+            constants[(matrix * 16) + (diagonal * 5)] = 1.f;
+
+    const StencilMode stencilMode = stencilWrite
+                                        ? StencilMode{StencilComparison::Always,
+                                                      StencilUpdateOperation::Replace,
+                                                      stencilValue,
+                                                      0xFF,
+                                                      !colorWrite}
+                                        : StencilMode{};
+
+    m_device.setPendingUserShader(nullptr, 0);
+    m_device.setPendingBlendMode(BlendNone, colorWrite);
+    m_device.setPendingDepthStencilState(m_device.getDepthStencilState(stencilMode), stencilValue.value);
+    // The fragment function samples unconditionally, a texture has to be bound
+    m_device.setPendingTexture(m_device.getWhiteTexture(), m_device.getSamplerState(false, false));
+    m_device.setPendingScissor(true, rect);
+    m_device.setPendingViewport(viewport);
     m_device.setPendingConstants(constants);
 
     if (m_device.applyPendingState())
     {
-        const std::array<Vertex, 6> quad = {{{{-1.f, -1.f}, color, {}},
-                                             {{1.f, -1.f}, color, {}},
-                                             {{-1.f, 1.f}, color, {}},
-                                             {{-1.f, 1.f}, color, {}},
-                                             {{1.f, -1.f}, color, {}},
-                                             {{1.f, 1.f}, color, {}}}};
+        const std::array<Vertex, 6> quad = {{{{-1.f, -1.f}, color},
+                                             {{1.f, -1.f}, color},
+                                             {{1.f, 1.f}, color},
+                                             {{-1.f, -1.f}, color},
+                                             {{1.f, 1.f}, color},
+                                             {{-1.f, 1.f}, color}}};
 
         std::size_t firstVertex = 0;
         if (m_device.uploadVertices(quad.data(), quad.size(), firstVertex))
             drawPrimitives(PrimitiveType::Triangles, firstVertex, quad.size());
     }
 
-    // Restore the pending state of the interrupted draws
-    m_device.setPendingTexture(savedTexture, savedSampler);
-    applyBlendMode(target, cache.lastBlendMode, m_lastColorWrite);
-    applyStencilMode(target, cache.lastStencilMode);
-    setPendingConstants();
-    applyCurrentView(target);
+    // The quad bypassed the state caches, the next draw has to re-record everything
+    auto& cache       = getCache(target);
+    cache.enable      = false;
+    cache.viewChanged = true;
 }
 
 } // namespace sf::priv
