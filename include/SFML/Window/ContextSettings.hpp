@@ -132,8 +132,9 @@ struct ContextSettings
 /// favors the highest possible uncapped frame rate, `LowLatency`
 /// favors the shortest delay between rendering a frame and it
 /// becoming visible. Backends map the intent to whatever their
-/// presentation path offers; the OpenGL backend currently has a
-/// single presentation path and ignores this setting.
+/// presentation path offers, and `Auto` picks the backend's most
+/// reliable path; the OpenGL backend currently has a single
+/// presentation path and ignores this setting.
 ///
 /// Please note that these values are only a hint.
 /// No failure will be reported if one or more of these values

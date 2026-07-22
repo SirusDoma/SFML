@@ -364,11 +364,12 @@ TEST_CASE("[Graphics] Backend rendering parity", runDisplayTests())
             CHECK(texture.copyToImage().getPixel({60, 45}) == sf::Color::Green);
 
 #ifdef SFML_TEST_BACKEND_D3D11
-            // The achieved presentation path is reported back
-            if (presentation == sf::ContextSettings::Presentation::Throughput)
-                CHECK(window.getSettings().presentation == sf::ContextSettings::Presentation::Throughput);
-            else
+            // The achieved presentation path is reported back, only an explicit
+            // low-latency request selects the flip-model path
+            if (presentation == sf::ContextSettings::Presentation::LowLatency)
                 CHECK(window.getSettings().presentation == sf::ContextSettings::Presentation::LowLatency);
+            else
+                CHECK(window.getSettings().presentation == sf::ContextSettings::Presentation::Throughput);
 #endif
         }
     }

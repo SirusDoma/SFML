@@ -93,7 +93,10 @@ D3D11RenderWindowImpl::D3D11RenderWindowImpl(D3D11GraphicsDevice&          devic
     }};
     // clang-format on
 
-    const bool forceBlit = (samples > 1) || (settings.presentation == ContextSettings::Presentation::Throughput);
+    // The flip-model path is opt-in for now: some driver/VRR configurations execute
+    // v-synced windowed flip presents as immediate flips once the window is promoted
+    // to independent flip, running past the refresh rate with v-sync enabled
+    const bool forceBlit = (samples > 1) || (settings.presentation != ContextSettings::Presentation::LowLatency);
 
     // Width and height are left zero so the buffers are sized from the window
     for (std::size_t i = forceBlit ? blitAttempt : 0; (i < attempts.size()) && !m_swapChain; ++i)
