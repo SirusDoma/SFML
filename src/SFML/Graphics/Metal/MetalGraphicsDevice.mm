@@ -801,8 +801,10 @@ bool MetalGraphicsDevice::applyPendingState()
         m_appliedPipelineKey = 0;
     }
 
+    // The blend mode and color mask are baked into the pipeline object, a change
+    // requires the user shader to bind a matching pipeline again
     if (!m_appliedValid || (m_applied.userShader != m_pending.userShader) ||
-        (m_applied.userShaderState != m_pending.userShaderState))
+        (m_applied.userShaderState != m_pending.userShaderState) || (m_applied.blendKey != m_pending.blendKey))
         m_userShaderBindPending = (m_pending.userShader != nullptr);
 
     if (m_attachments.depthStencilFormat != 0)
@@ -916,8 +918,27 @@ bool MetalGraphicsDevice::applyUserShaderPipeline(MetalFunctionPtr vertexFunctio
                                                        vertexFunction,
                                                        fragmentFunction,
                                                        shaderId);
+
+    // Fall back to the built-in pipeline so the draw never runs without one bound
     if (!pipeline)
+    {
+        pipeline = getPipelineState(m_pending.blendMode,
+                                    m_pending.colorWrite,
+                                    m_pending.blendKey,
+                                    m_attachments.colorFormat,
+                                    m_attachments.sampleCount,
+                                    m_attachments.depthStencilFormat);
+        if (pipeline)
+        {
+            [m_encoder.get() setRenderPipelineState:pipeline];
+            m_appliedPipelineKey = makePipelineKey(m_pending.blendKey,
+                                                   m_attachments.colorFormat,
+                                                   m_attachments.sampleCount,
+                                                   m_attachments.depthStencilFormat,
+                                                   0);
+        }
         return false;
+    }
 
     [m_encoder.get() setRenderPipelineState:pipeline];
     m_appliedPipelineKey = pipelineKey;

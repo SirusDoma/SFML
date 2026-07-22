@@ -337,10 +337,11 @@ private:
     {
         struct Variable
         {
-            std::size_t   block{};       //!< Index into the stage's buffer blocks
-            std::size_t   offset{};      //!< Byte offset inside the block
-            std::size_t   arrayStride{}; //!< Byte stride between array elements, 0 for non-arrays
-            std::uint32_t dataType{};    //!< Raw MTLDataType of one element
+            std::size_t   block{};        //!< Index into the stage's buffer blocks
+            std::size_t   offset{};       //!< Byte offset inside the block
+            std::size_t   arrayStride{};  //!< Byte stride between array elements, 0 for non-arrays
+            std::size_t   elementCount{1}; //!< Number of array elements the shader declared
+            std::uint32_t dataType{};     //!< Raw MTLDataType of one element
         };
 
         struct Block

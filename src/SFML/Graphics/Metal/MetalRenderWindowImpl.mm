@@ -132,6 +132,11 @@ void MetalRenderWindowImpl::present()
         {
             m_device.flushPendingDraws();
             m_device.endEncoding(false);
+
+            // Another surface is current, the multisampled content still has to
+            // reach the drawable before it is presented
+            if (m_multisampleTexture && m_drawable)
+                m_device.resolvePass(m_multisampleTexture.get(), [m_drawable.get() texture]);
         }
 
         if (m_drawable)
@@ -212,16 +217,11 @@ bool MetalRenderWindowImpl::isSrgb() const
 ////////////////////////////////////////////////////////////
 bool MetalRenderWindowImpl::activate(bool active)
 {
+    // Deactivation is a no-op, all surfaces share the single device
     if (active)
-    {
         m_device.bindSurface(this);
-        return true;
-    }
 
-    if (m_device.getCurrentSurface() == this)
-        m_device.unbindSurface(this);
-
-    return true;
+    return m_layer.get() != nullptr;
 }
 
 

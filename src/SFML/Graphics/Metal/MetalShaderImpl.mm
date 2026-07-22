@@ -250,7 +250,12 @@ void MetalShaderImpl::setUniform(const std::string& name, const Glsl::Mat4& matr
 void MetalShaderImpl::setUniform(const std::string& name, const Texture& texture)
 {
     m_textures[name] = &texture;
-    m_revision       = getRevisionCounter().fetch_add(1, std::memory_order_relaxed);
+
+    // The last assignment wins, like overwriting a GLSL sampler uniform does
+    if (m_currentTextureName == name)
+        m_currentTextureName.clear();
+
+    m_revision = getRevisionCounter().fetch_add(1, std::memory_order_relaxed);
 }
 
 
@@ -258,7 +263,11 @@ void MetalShaderImpl::setUniform(const std::string& name, const Texture& texture
 void MetalShaderImpl::setCurrentTextureUniform(const std::string& name)
 {
     m_currentTextureName = name;
-    m_revision           = getRevisionCounter().fetch_add(1, std::memory_order_relaxed);
+
+    // The last assignment wins, unassigned textures sample the draw's texture
+    m_textures.erase(name);
+
+    m_revision = getRevisionCounter().fetch_add(1, std::memory_order_relaxed);
 }
 
 
@@ -428,9 +437,10 @@ void MetalShaderImpl::reflect(void* reflectionObject)
 
                         if ([member dataType] == MTLDataTypeArray)
                         {
-                            MTLArrayType* array  = [member arrayType];
-                            variable.arrayStride = [array stride];
-                            variable.dataType    = static_cast<std::uint32_t>([array elementType]);
+                            MTLArrayType* array   = [member arrayType];
+                            variable.arrayStride  = [array stride];
+                            variable.elementCount = [array arrayLength];
+                            variable.dataType     = static_cast<std::uint32_t>([array elementType]);
                         }
                         else
                         {
@@ -480,7 +490,8 @@ void MetalShaderImpl::writeUniform(const std::string& name, const void* data, st
 
         const std::size_t stride = std::max(variable.arrayStride, elementSize);
 
-        for (std::size_t element = 0; element < elementCount; ++element)
+        // Excess elements are dropped, writing past the variable would corrupt its neighbors
+        for (std::size_t element = 0; element < std::min(elementCount, variable.elementCount); ++element)
         {
             const std::size_t offset = variable.offset + element * stride;
             if (offset + elementSize > shadow.size())

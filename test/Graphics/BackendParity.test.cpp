@@ -261,6 +261,24 @@ TEST_CASE("[Graphics] Backend rendering parity", runDisplayTests())
         CHECK(image.getPixel({75, 75}) == sf::Color::White);
     }
 
+    SECTION("Texture loaded from an image sub-rectangle")
+    {
+        sf::Image source(sf::Vector2u(4, 4), sf::Color::White);
+        for (unsigned int x = 2; x < 4; ++x)
+            for (unsigned int y = 2; y < 4; ++y)
+                source.setPixel({x, y}, sf::Color::Cyan);
+
+        const sf::Texture texture(source, false, sf::IntRect({2, 2}, {2, 2}));
+
+        sf::Sprite sprite(texture);
+        sprite.setScale({50.f, 50.f});
+
+        target.clear(sf::Color::Black);
+        target.draw(sprite);
+        const sf::Image image = render(target);
+        CHECK(image.getPixel({50, 50}) == sf::Color::Cyan);
+    }
+
     SECTION("Draw order across merged and unmerged draws")
     {
         sf::Image         whiteImage(sf::Vector2u(4, 4), sf::Color::White);
@@ -334,6 +352,26 @@ TEST_CASE("[Graphics] Backend rendering parity", runDisplayTests())
         target.draw(quad.data(), quad.size(), sf::PrimitiveType::Triangles, sf::RenderStates(&shader));
         const sf::Image image = render(target);
         CHECK(image.getPixel({50, 50}) == sf::Color::Green);
+    }
+
+    SECTION("Blend mode changes between draws with the same shader")
+    {
+        sf::Shader shader;
+        REQUIRE(shader.loadFromMemory(selectShader(flatFragmentGlsl, flatFragmentHlsl, flatFragmentMsl),
+                                      sf::Shader::Type::Fragment));
+
+        target.clear(sf::Color::Red);
+        const auto quad = makeQuad({0, 0}, {100, 100}, sf::Color::White);
+
+        // The shader outputs green: adding it over red gives yellow, replacing gives green
+        sf::RenderStates states(&shader);
+        states.blendMode = sf::BlendAdd;
+        target.draw(quad.data(), quad.size(), sf::PrimitiveType::Triangles, states);
+        CHECK(render(target).getPixel({50, 50}) == sf::Color::Yellow);
+
+        states.blendMode = sf::BlendNone;
+        target.draw(quad.data(), quad.size(), sf::PrimitiveType::Triangles, states);
+        CHECK(render(target).getPixel({50, 50}) == sf::Color::Green);
     }
 
     SECTION("Vertex buffer")

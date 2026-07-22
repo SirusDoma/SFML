@@ -149,13 +149,11 @@ void MetalTextureImpl::update(const Image& image, const IntRect& rectangle, [[ma
 {
     const auto imageSize = Vector2i(image.getSize());
 
-    // The source row pitch covers the full image, no row-by-row copy is needed for the sub-rectangle
+    // The source row pitch covers the full image, no row-by-row copy is needed for the
+    // sub-rectangle; the rectangle selects the source area, the destination is the origin
     const std::uint8_t* pixels = image.getPixelsPtr() + 4 * (rectangle.position.x + (imageSize.x * rectangle.position.y));
 
-    uploadPixels(pixels,
-                 static_cast<std::size_t>(imageSize.x) * 4,
-                 Vector2u(rectangle.size),
-                 Vector2u(rectangle.position));
+    uploadPixels(pixels, static_cast<std::size_t>(imageSize.x) * 4, Vector2u(rectangle.size), Vector2u());
 }
 
 
@@ -365,8 +363,10 @@ void MetalTextureImpl::uploadPixels(const std::uint8_t* pixels, std::size_t byte
 
     const MetalGraphicsDevice::ContextLock lock(m_device);
 
-    // Draws collected so far must sample the texture before it changes
+    // Draws collected so far must sample the texture before it changes, and a clear
+    // recorded for this texture must land before the upload instead of wiping it
     m_device.flushPendingDraws();
+    m_device.materializePendingClears();
 
     // While the GPU holds no work referencing the texture the pixels can be written directly
     if (m_device.isGpuIdle())
