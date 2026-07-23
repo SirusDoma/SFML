@@ -136,15 +136,26 @@ struct ContextSettings
 /// frame time spikes for less input latency. Backends map the
 /// intent to whatever their presentation path offers; the OpenGL
 /// backend currently has a single presentation path and ignores
-/// this setting.
+/// this setting. The settings of a created window report the
+/// achieved path, which does not distinguish `Auto` from an
+/// explicit `Throughput`.
 ///
-/// On Metal the explicit intents additionally make the window's
-/// drawables write-only for the presentation fast path, so
-/// `sf::Texture::update(const Window&)` fails on such windows;
-/// request `Auto` when the window contents have to be captured.
-/// The settings of a created window report the achieved path,
-/// which does not distinguish `Auto` from an explicit
-/// `Throughput`.
+/// <b>Special Note for Windows:</b>
+/// On the Direct3D 11 renderer `Auto` and `Throughput` present
+/// through the classic blit path, which behaves the same on
+/// every system, while `LowLatency` opts into the flip model,
+/// which hands frames to the display with less delay but is more
+/// exposed to driver and display quirks. Multisampled windows
+/// always use the blit path, and a window whose v-synced flip
+/// presentation is not paced by the driver falls back to the
+/// blit path on its own.
+///
+/// <b>Special Note for macOS:</b>
+/// On the Metal renderer the explicit intents additionally make
+/// the window's drawables write-only for the presentation fast
+/// path, so `sf::Texture::update(const Window&)` fails on such
+/// windows; request `Auto` when the window contents have to be
+/// captured.
 ///
 /// Please note that these values are only a hint.
 /// No failure will be reported if one or more of these values

@@ -537,9 +537,16 @@ public:
     /// This function does nothing if either the texture or the window
     /// was not previously created.
     ///
-    /// On the Metal renderer the contents of a window only exist
-    /// while its frame is being composed, call this function after
-    /// drawing and before `display()`; windows created with an
+    /// <b>Special Note for Windows:</b>
+    /// The Direct3D 11 renderer can only copy from an
+    /// `sf::RenderWindow`; a plain `sf::Window` has no Direct3D
+    /// surface to read from.
+    ///
+    /// <b>Special Note for macOS:</b>
+    /// The Metal renderer can also only copy from an
+    /// `sf::RenderWindow`, and the contents of a window only exist
+    /// while its frame is being composed: call this function after
+    /// drawing and before `display()`. Windows created with an
     /// explicit presentation intent cannot be captured at all
     /// (see `sf::ContextSettings::Presentation`).
     ///
@@ -557,6 +564,19 @@ public:
     ///
     /// This function does nothing if either the texture or the window
     /// was not previously created.
+    ///
+    /// <b>Special Note for Windows:</b>
+    /// The Direct3D 11 renderer can only copy from an
+    /// `sf::RenderWindow`; a plain `sf::Window` has no Direct3D
+    /// surface to read from.
+    ///
+    /// <b>Special Note for macOS:</b>
+    /// The Metal renderer can also only copy from an
+    /// `sf::RenderWindow`, and the contents of a window only exist
+    /// while its frame is being composed: call this function after
+    /// drawing and before `display()`. Windows created with an
+    /// explicit presentation intent cannot be captured at all
+    /// (see `sf::ContextSettings::Presentation`).
     ///
     /// \param window Window to copy to the texture
     /// \param dest   Coordinates of the destination position
