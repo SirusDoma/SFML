@@ -44,6 +44,7 @@ MetalRenderWindowImpl::MetalRenderWindowImpl(MetalGraphicsDevice&   device,
                                              [[maybe_unused]] unsigned int bitsPerPixel) :
     m_device(device),
     m_pacer(std::make_shared<FramePacer>()),
+    m_visible(std::make_shared<std::atomic<bool>>(true)),
     m_sRgb(settings.sRgbCapable)
 {
     // The handle is either the window or a view inside it
@@ -68,10 +69,13 @@ MetalRenderWindowImpl::MetalRenderWindowImpl(MetalGraphicsDevice&   device,
 
     // Map the presentation intent: the balanced default keeps the drawables readable so
     // the window contents can be captured, the explicit intents trade that for the
-    // direct-to-display fast path
+    // direct-to-display fast path. All intents keep the full drawable pool: pacing
+    // v-synced presents any tighter, whether by a smaller pool or by counting
+    // presented frames, was measured to miss vertical syncs on high-refresh
+    // displays, the compositor paces windowed presents itself.
     const bool fastPath        = settings.presentation != ContextSettings::Presentation::Auto;
     layer.framebufferOnly      = fastPath ? YES : NO;
-    layer.maximumDrawableCount = (settings.presentation == ContextSettings::Presentation::LowLatency) ? 2 : 3;
+    layer.maximumDrawableCount = 3;
 
     // V-sync starts out disabled
     layer.displaySyncEnabled = NO;
@@ -83,6 +87,24 @@ MetalRenderWindowImpl::MetalRenderWindowImpl(MetalGraphicsDevice&   device,
     [view setLayer:layer];
     [view setWantsLayer:YES];
     m_layer.reset(layer);
+
+    // Track occlusion so hidden windows skip their frames instead of stalling in
+    // nextDrawable waiting for drawables the compositor will not recycle. The
+    // notification arrives on the main thread, the shared flag decouples it from
+    // this surface's lifetime.
+    if (NSWindow* nsWindow = [view window])
+    {
+        const std::shared_ptr<std::atomic<bool>> visible = m_visible;
+        m_occlusionObserver.reset([[[NSNotificationCenter defaultCenter]
+            addObserverForName:NSWindowDidChangeOcclusionStateNotification
+                        object:nsWindow
+                         queue:nil
+                    usingBlock:^(NSNotification* notification) {
+                        visible->store(([static_cast<NSWindow*>(notification.object) occlusionState] &
+                                        NSWindowOcclusionStateVisible) != 0,
+                                       std::memory_order_relaxed);
+                    }] retain]);
+    }
 
     // Pick the depth-stencil format: SFML itself only ever tests stencil, a depth
     // plane is allocated when the user asked for one for their own Metal rendering
@@ -110,6 +132,9 @@ MetalRenderWindowImpl::MetalRenderWindowImpl(MetalGraphicsDevice&   device,
 ////////////////////////////////////////////////////////////
 MetalRenderWindowImpl::~MetalRenderWindowImpl()
 {
+    if (m_occlusionObserver)
+        [[NSNotificationCenter defaultCenter] removeObserver:static_cast<id>(m_occlusionObserver.get())];
+
     m_device.unbindSurface(this);
 }
 
@@ -143,6 +168,8 @@ void MetalRenderWindowImpl::present()
         {
             if (id<MTLCommandBuffer> commandBuffer = m_device.currentCommandBuffer())
             {
+                const std::shared_ptr<FramePacer> pacer = m_pacer;
+
                 [commandBuffer presentDrawable:m_drawable.get()];
 
                 {
@@ -150,7 +177,6 @@ void MetalRenderWindowImpl::present()
                     ++m_pacer->pending;
                 }
 
-                const std::shared_ptr<FramePacer> pacer = m_pacer;
                 [commandBuffer addCompletedHandler:^(id<MTLCommandBuffer>) {
                     {
                         const std::lock_guard pacerLock(pacer->mutex);
@@ -230,6 +256,19 @@ bool MetalRenderWindowImpl::prepareAttachments(MetalSurfaceAttachments& attachme
 {
     if (!m_layer)
         return false;
+
+    // Hidden windows drop their frames, nextDrawable would stall waiting for
+    // drawables the compositor will not recycle. The notification lags becoming
+    // visible again by a few run loop turns, the state itself is fresh but only
+    // safe to read on the main thread.
+    if (!m_visible->load(std::memory_order_relaxed))
+    {
+        NSWindow* nsWindow = [NSThread isMainThread] ? [static_cast<NSView*>(m_view.get()) window] : nil;
+        if (!nsWindow || !([nsWindow occlusionState] & NSWindowOcclusionStateVisible))
+            return false;
+
+        m_visible->store(true, std::memory_order_relaxed);
+    }
 
     @autoreleasepool
     {

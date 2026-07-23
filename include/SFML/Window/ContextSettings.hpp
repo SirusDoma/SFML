@@ -131,9 +131,20 @@ struct ContextSettings
 /// independent of the graphics backend in use. `Throughput`
 /// favors the highest possible uncapped frame rate, `LowLatency`
 /// favors the shortest delay between rendering a frame and it
-/// becoming visible. Backends map the intent to whatever their
-/// presentation path offers; the OpenGL backend currently has a
-/// single presentation path and ignores this setting.
+/// becoming visible, keeping the presentation queue as short as
+/// the platform allows and trading the deeper queue that absorbs
+/// frame time spikes for less input latency. Backends map the
+/// intent to whatever their presentation path offers; the OpenGL
+/// backend currently has a single presentation path and ignores
+/// this setting.
+///
+/// On Metal the explicit intents additionally make the window's
+/// drawables write-only for the presentation fast path, so
+/// `sf::Texture::update(const Window&)` fails on such windows;
+/// request `Auto` when the window contents have to be captured.
+/// The settings of a created window report the achieved path,
+/// which does not distinguish `Auto` from an explicit
+/// `Throughput`.
 ///
 /// Please note that these values are only a hint.
 /// No failure will be reported if one or more of these values

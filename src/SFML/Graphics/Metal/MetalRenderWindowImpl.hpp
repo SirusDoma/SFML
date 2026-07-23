@@ -32,6 +32,7 @@
 
 #include <SFML/Window/WindowHandle.hpp>
 
+#include <atomic>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -185,10 +186,12 @@ private:
     NSPtr<MetalTexturePtr>      m_multisampleTexture;  //!< Multisampled color buffer, null when not multisampled
     NSPtr<MetalTexturePtr>      m_depthStencilTexture; //!< Depth-stencil buffer, can be null
     std::shared_ptr<FramePacer> m_pacer;               //!< Frames in flight, shared with the completion handlers
-    ContextSettings             m_settings;            //!< Settings actually used by the surface
-    std::uint32_t               m_depthStencilFormat{}; //!< Raw MTLPixelFormat of the depth-stencil buffer, 0 when none
-    unsigned int                m_sampleCount{1};       //!< Samples per pixel of the color buffer
-    bool                        m_sRgb{};               //!< Whether the layer uses sRGB encoding
+    std::shared_ptr<std::atomic<bool>> m_visible; //!< Whether the window can be seen, shared with the occlusion observer
+    NSPtr<void*>    m_occlusionObserver;    //!< Token of the occlusion notification observer
+    ContextSettings m_settings;             //!< Settings actually used by the surface
+    std::uint32_t   m_depthStencilFormat{}; //!< Raw MTLPixelFormat of the depth-stencil buffer, 0 when none
+    unsigned int    m_sampleCount{1};       //!< Samples per pixel of the color buffer
+    bool            m_sRgb{};               //!< Whether the layer uses sRGB encoding
 };
 
 } // namespace sf::priv

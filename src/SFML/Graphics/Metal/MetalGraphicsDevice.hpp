@@ -626,6 +626,17 @@ public:
                                                std::uint32_t    shaderId);
 
     ////////////////////////////////////////////////////////////
+    /// \brief Drop the cached pipeline states of a user shader
+    ///
+    /// Shader ids are never reused, without this the pipelines of
+    /// destroyed or recompiled shaders would stay cached forever.
+    ///
+    /// \param shaderId Identity of the function pair to clear
+    ///
+    ////////////////////////////////////////////////////////////
+    void clearShaderPipelines(std::uint32_t shaderId);
+
+    ////////////////////////////////////////////////////////////
     /// \brief Get the encoder of the open render pass
     ///
     /// Only valid after `applyPendingState` returned `true`, and

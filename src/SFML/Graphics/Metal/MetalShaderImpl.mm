@@ -71,10 +71,22 @@ MetalShaderImpl::MetalShaderImpl(MetalGraphicsDevice& device) :
 
 
 ////////////////////////////////////////////////////////////
+MetalShaderImpl::~MetalShaderImpl()
+{
+    if (m_shaderId != 0)
+        m_device.clearShaderPipelines(m_shaderId);
+}
+
+
+////////////////////////////////////////////////////////////
 bool MetalShaderImpl::compile(std::string_view vertexShaderCode,
                               std::string_view geometryShaderCode,
                               std::string_view fragmentShaderCode)
 {
+    // Recompiling gets a fresh id, the pipelines of the previous one are unreachable
+    if (m_shaderId != 0)
+        m_device.clearShaderPipelines(m_shaderId);
+
     m_vertexStage   = {};
     m_fragmentStage = {};
     m_textures.clear();

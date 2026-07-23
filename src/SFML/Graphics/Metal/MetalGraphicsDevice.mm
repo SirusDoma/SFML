@@ -182,6 +182,9 @@ std::uint64_t packPixelFormat(std::uint32_t format)
     // clang-format on
 }
 
+// Position of the shader id inside a pipeline cache key
+constexpr std::uint64_t pipelineShaderIdShift = 35;
+
 // Pack everything baked into a pipeline state object into a cache key
 std::uint64_t makePipelineKey(std::uint32_t blendKey,
                               std::uint32_t colorFormat,
@@ -191,7 +194,7 @@ std::uint64_t makePipelineKey(std::uint32_t blendKey,
 {
     return static_cast<std::uint64_t>(blendKey) | (packPixelFormat(colorFormat) << 25) |
            (static_cast<std::uint64_t>(sampleCount) << 28) | (packPixelFormat(depthStencilFormat) << 32) |
-           (static_cast<std::uint64_t>(shaderId) << 35);
+           (static_cast<std::uint64_t>(shaderId) << pipelineShaderIdShift);
 }
 
 // Transient chunks are large enough for many merged draws
@@ -944,6 +947,25 @@ bool MetalGraphicsDevice::applyUserShaderPipeline(MetalFunctionPtr vertexFunctio
     m_appliedPipelineKey = pipelineKey;
 
     return true;
+}
+
+
+////////////////////////////////////////////////////////////
+void MetalGraphicsDevice::clearShaderPipelines(std::uint32_t shaderId)
+{
+    const ContextLock lock(*this);
+
+    for (auto it = m_pipelineStates.begin(); it != m_pipelineStates.end();)
+    {
+        if ((it->first >> pipelineShaderIdShift) == shaderId)
+            it = m_pipelineStates.erase(it);
+        else
+            ++it;
+    }
+
+    // The encoder may hold one of the cleared pipelines, re-set on the next draw
+    if ((m_appliedPipelineKey >> pipelineShaderIdShift) == shaderId)
+        m_appliedPipelineKey = 0;
 }
 
 

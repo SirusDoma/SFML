@@ -64,6 +64,12 @@ public:
     explicit MetalShaderImpl(MetalGraphicsDevice& device);
 
     ////////////////////////////////////////////////////////////
+    /// \brief Destructor, drops the shader's cached pipeline states
+    ///
+    ////////////////////////////////////////////////////////////
+    ~MetalShaderImpl() override;
+
+    ////////////////////////////////////////////////////////////
     /// \brief Compile the shader(s) and create the program
     ///
     /// If one of the arguments is empty, the corresponding shader

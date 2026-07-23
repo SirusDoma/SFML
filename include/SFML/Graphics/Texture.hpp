@@ -537,6 +537,12 @@ public:
     /// This function does nothing if either the texture or the window
     /// was not previously created.
     ///
+    /// On the Metal renderer the contents of a window only exist
+    /// while its frame is being composed, call this function after
+    /// drawing and before `display()`; windows created with an
+    /// explicit presentation intent cannot be captured at all
+    /// (see `sf::ContextSettings::Presentation`).
+    ///
     /// \param window Window to copy to the texture
     ///
     ////////////////////////////////////////////////////////////
