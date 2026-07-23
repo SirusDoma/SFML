@@ -4,67 +4,19 @@
 
 SFML is a simple, fast, cross-platform and object-oriented multimedia API. It provides access to windowing, graphics, audio and network. It is written in C++ and has bindings for various languages such as C, .Net, Ruby, Python.
 
+## About This Fork
+
+This fork makes the rendering pipeline of the graphics module modular. The pipeline is split from its OpenGL implementation and placed behind a set of internal backend interfaces, and two additional renderers are implemented on top of them: Direct3D 11 on Windows and Metal on macOS. OpenGL remains the default renderer on every platform; another renderer can be selected at runtime with `sf::setRenderer` before the first graphics resource is created.
+
+Although the additional renderers are built on this abstraction, supporting user-provided/hot-swappable rendering backends is not the goal. The goal is to make the existing pipeline customizable: for example, a custom render target can now be written without dealing with the rendering implementation directly, where previously `sf::RenderTarget` was tightly coupled to OpenGL states. This is useful when you have to deal with vertices but in high-level context, such as implementing sprite batching.
+
+The changes to the public API are kept non-intrusive, so existing projects can use this fork without any modification. In turn, the semantics change in some places behind the scenes. For example, the Direct3D 11 and Metal renderers defer and batch draws internally to accommodate the immediate drawing style of the SFML API, since issuing every draw immediately through these APIs would hurt performance. The OpenGL renderer is unchanged in this regard: calling `draw` there still issues exactly one draw call immediately, as it always has. Where the difference would be observable, the original semantics are maintained instead. For example, clearing with a scissored view only clears the scissor rectangle on every renderer, like it does on OpenGL.
+
+Mixing SFML rendering with raw graphics API calls remains supported on every renderer. Just like the original SFML allows raw OpenGL calls alongside its own drawing, the `sf::OpenGL`, `sf::D3D11` and `sf::Metal` namespaces expose the underlying device and resources of the active renderer, so raw Direct3D 11 and Metal code can be mixed into an SFML frame the same way raw OpenGL always could. The `opengl`, `direct3d` and `metal` examples demonstrate this.
+
 ## State of Development
 
-Development is focused on version 3 in the `master` branch.
-No more features are planned for the 2.x release series.
-
-## CMake Template
-
-The easiest way to get started with SFML is our [CMake-based project template](https://github.com/SFML/cmake-sfml-project/blob/master/README.md).
-This template will automatically download and build SFML alongside your own application.
-Read the README for full instructions on how to use it.
-
-## Download
-
--   You can get the latest official release on [SFML's website](https://www.sfml-dev.org/download.php).
--   You can also get the source code of the current development version from the [Git repository](https://github.com/SFML/SFML).
--   Alternatively, you can get the latest snapshot / artifact builds from the [artifacts storage](https://artifacts.sfml-dev.org/by-branch/master/).
-
-## Install
-
-Follow the instructions of the [tutorials](https://www.sfml-dev.org/tutorials/), there is one for each platform/compiler that SFML supports.
-
-## Learn
-
-There are several places to learn SFML:
-
--   The [official tutorials](https://www.sfml-dev.org/tutorials/)
--   The [online API documentation](https://www.sfml-dev.org/documentation/)
--   The [community wiki](https://github.com/SFML/SFML/wiki/)
-
-## Community
-
-Here are some useful community links:
-
--   [Discord](https://discord.gg/nr4X7Fh)
--   [Twitter](https://twitter.com/sfmldev)
--   [Forum](https://en.sfml-dev.org/forums/) ([French](https://fr.sfml-dev.org/forums/))
-
-## Contribute
-
-SFML is an open-source project, and it needs your help to go on growing and improving. If you want to get involved and suggest some additional features, file a bug report or submit a patch, please have a look at the [contribution guidelines](https://www.sfml-dev.org/contribute.php).
-
-## Authors
-
--   Laurent Gomila (laurent@sfml-dev.org)
--   Marco Antognini (hiura@sfml-dev.org)
--   binary1248 (binary1248@hotmail.com)
--   Lukas Dürrenberger (eXpl0it3r@sfml-dev.org)
--   Jonathan De Wachter (dewachter.jonathan@gmail.com)
--   Jan Haller (bromeon@sfml-dev.org)
--   Mario Liebisch (mario@sfml-dev.org)
--   Stefan Schindler (tank@sfml-dev.org)
--   Artur Moreira (artturmoreira@gmail.com)
--   Vittorio Romeo (vittorioromeo@sfml-dev.org)
--   Chris Thrasher (thrasher@sfml-dev.org)
--   And many other members of the SFML community
-
-## License
-
-The SFML libraries and source code are distributed under the [zlib/libpng license](https://opensource.org/licenses/Zlib). See [license.md](license.md). External libraries used by SFML are distributed under their own licenses.
-
-In short, SFML is free for any use (commercial or personal, proprietary or open-source). You can use SFML in your project without any restriction. You can even omit to mention that you use SFML -- although it would be appreciated.
+Development of this fork takes place in the `graphics/modular` branch.
 
 ## External libraries used by SFML
 
