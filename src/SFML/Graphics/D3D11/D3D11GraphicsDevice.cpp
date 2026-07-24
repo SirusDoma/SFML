@@ -636,10 +636,13 @@ bool D3D11GraphicsDevice::uploadVertices(const void* vertices, std::size_t verte
     if (!m_device || !m_context)
         return false;
 
-    // Grow the streaming buffer when the batch doesn't fit at all
+    // Grow the streaming buffer when the batch doesn't fit at all. The head
+    // room beyond the largest single batch keeps steady-state uploads
+    // appending with no-overwrite maps; an exact fit would wrap and re-orphan
+    // the buffer on every upload.
     if (vertexCount > m_streamVertexBufferSize)
     {
-        const std::size_t newSize = std::max<std::size_t>({vertexCount, m_streamVertexBufferSize * 2, 4096});
+        const std::size_t newSize = std::max<std::size_t>({vertexCount * 2, m_streamVertexBufferSize * 2, 4096});
 
         D3D11_BUFFER_DESC desc{};
         desc.ByteWidth      = static_cast<UINT>(sizeof(Vertex) * newSize);
