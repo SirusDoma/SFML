@@ -303,6 +303,18 @@ void D3D11RenderWindowImpl::setVerticalSyncEnabled(bool enabled)
     // queue run ahead when frames are presented as fast as possible
     if (m_swapChain2)
         d3dCheck(m_swapChain2->SetMaximumFrameLatency(enabled ? 1 : 3));
+
+    // The waitable object is a semaphore: it starts signaled for the initial
+    // latency, and every present retired while v-sync was off signals it with
+    // no wait consuming the signal. The accumulated surplus would let that
+    // many v-synced frames skip their pacing wait and pile up in the
+    // presentation queue, so it is drained whenever the pacing starts.
+    if (enabled && m_frameLatencyWaitable)
+    {
+        while (WaitForSingleObjectEx(m_frameLatencyWaitable, 0, FALSE) == WAIT_OBJECT_0)
+        {
+        }
+    }
 }
 
 
