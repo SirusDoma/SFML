@@ -40,7 +40,7 @@
 namespace
 {
 // Never instantiated, re-exposes the protected resource accessors of the implementation base
-struct ImplAccess : sf::priv::RenderTargetImpl
+struct D3D11ImplAccess : sf::priv::RenderTargetImpl
 {
     using RenderTargetImpl::getId;
     using RenderTargetImpl::getImpl;
@@ -118,7 +118,7 @@ ID3D11Texture2D* getTexture([[maybe_unused]] const Texture& texture)
 #ifdef SFML_ENABLE_D3D11
     if (getD3d11Device())
     {
-        if (auto* impl = ImplAccess::getTextureImpl(texture))
+        if (auto* impl = D3D11ImplAccess::getTextureImpl(texture))
             return static_cast<priv::D3D11TextureImpl*>(impl)->getTexture();
     }
 #endif
@@ -133,7 +133,7 @@ ID3D11ShaderResourceView* getShaderResourceView([[maybe_unused]] const Texture& 
 #ifdef SFML_ENABLE_D3D11
     if (getD3d11Device())
     {
-        if (auto* impl = ImplAccess::getTextureImpl(texture))
+        if (auto* impl = D3D11ImplAccess::getTextureImpl(texture))
             return static_cast<priv::D3D11TextureImpl*>(impl)->getShaderResourceView();
     }
 #endif
@@ -148,7 +148,7 @@ ID3D11Buffer* getBuffer([[maybe_unused]] const VertexBuffer& vertexBuffer)
 #ifdef SFML_ENABLE_D3D11
     if (getD3d11Device())
     {
-        if (auto* impl = ImplAccess::getVertexBufferImpl(vertexBuffer))
+        if (auto* impl = D3D11ImplAccess::getVertexBufferImpl(vertexBuffer))
             return static_cast<priv::D3D11VertexBufferImpl*>(impl)->getBuffer();
     }
 #endif
@@ -170,8 +170,8 @@ void flush()
 ////////////////////////////////////////////////////////////
 void resetStates(RenderTarget& target)
 {
-    if (auto* impl = ImplAccess::getImpl(target))
-        impl->resetStates(target, ImplAccess::getId(target));
+    if (auto* impl = D3D11ImplAccess::getImpl(target))
+        impl->resetStates(target, D3D11ImplAccess::getId(target));
 }
 
 } // namespace sf::D3D11

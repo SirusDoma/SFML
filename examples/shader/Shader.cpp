@@ -24,9 +24,24 @@ std::mt19937       rng(rd());
 // Shading language helpers, the shader sources are provided
 // in the language the active backend consumes
 ////////////////////////////////////////////////////////////
+// On the Vulkan renderer the shaders can be fed either as precompiled SPIR-V
+// or as HLSL source text (the latter needs the runtime shader compiler); the
+// form is chosen on the command line, SPIR-V is the default
+bool vulkanUseSpirv = true;
+
+bool onVulkan()
+{
+    return sf::getRenderer() == sf::Renderer::Vulkan;
+}
+
+bool useSpirv()
+{
+    return onVulkan() && vulkanUseSpirv;
+}
+
 bool useHlsl()
 {
-    return sf::getShadingLanguage() == sf::ShadingLanguage::Hlsl;
+    return (sf::getShadingLanguage() == sf::ShadingLanguage::Hlsl) && !useSpirv();
 }
 
 bool useMsl()
@@ -36,8 +51,9 @@ bool useMsl()
 
 const char* currentTextureName()
 {
-    // "texture" is a reserved word in HLSL
-    return useHlsl() ? "tex" : "texture";
+    // "texture" is a reserved word in HLSL, and the SPIR-V shaders are
+    // compiled from the HLSL sources
+    return useHlsl() || useSpirv() ? "tex" : "texture";
 }
 
 
@@ -304,9 +320,10 @@ std::optional<Pixelate> tryLoadPixelate()
         return std::nullopt;
 
     sf::Shader shader;
-    if (!shader.loadFromFile(useHlsl()  ? "resources/pixelate.hlsl"
-                             : useMsl() ? "resources/pixelate.metal"
-                                        : "resources/pixelate.frag",
+    if (!shader.loadFromFile(useSpirv()  ? "resources/pixelate-ps.spv"
+                             : useHlsl() ? "resources/pixelate.hlsl"
+                             : useMsl()  ? "resources/pixelate.metal"
+                                         : "resources/pixelate.frag",
                              sf::Shader::Type::Fragment))
         return std::nullopt;
 
@@ -316,9 +333,10 @@ std::optional<Pixelate> tryLoadPixelate()
 std::optional<WaveBlur> tryLoadWaveBlur(const sf::Font& font)
 {
     sf::Shader shader;
-    if (useHlsl()  ? !shader.loadFromFile("resources/wave.hlsl", "resources/blur.hlsl")
-        : useMsl() ? !shader.loadFromFile("resources/wave.metal", "resources/blur.metal")
-                   : !shader.loadFromFile("resources/wave.vert", "resources/blur.frag"))
+    if (useSpirv()  ? !shader.loadFromFile("resources/wave-vs.spv", "resources/blur-ps.spv")
+        : useHlsl() ? !shader.loadFromFile("resources/wave.hlsl", "resources/blur.hlsl")
+        : useMsl()  ? !shader.loadFromFile("resources/wave.metal", "resources/blur.metal")
+                    : !shader.loadFromFile("resources/wave.vert", "resources/blur.frag"))
         return std::nullopt;
 
     return std::make_optional<WaveBlur>(font, std::move(shader));
@@ -327,9 +345,10 @@ std::optional<WaveBlur> tryLoadWaveBlur(const sf::Font& font)
 std::optional<StormBlink> tryLoadStormBlink()
 {
     sf::Shader shader;
-    if (useHlsl()  ? !shader.loadFromFile("resources/storm.hlsl", "resources/blink.hlsl")
-        : useMsl() ? !shader.loadFromFile("resources/storm.metal", "resources/blink.metal")
-                   : !shader.loadFromFile("resources/storm.vert", "resources/blink.frag"))
+    if (useSpirv()  ? !shader.loadFromFile("resources/storm-vs.spv", "resources/blink-ps.spv")
+        : useHlsl() ? !shader.loadFromFile("resources/storm.hlsl", "resources/blink.hlsl")
+        : useMsl()  ? !shader.loadFromFile("resources/storm.metal", "resources/blink.metal")
+                    : !shader.loadFromFile("resources/storm.vert", "resources/blink.frag"))
         return std::nullopt;
 
     return std::make_optional<StormBlink>(std::move(shader));
@@ -360,9 +379,10 @@ std::optional<Edge> tryLoadEdge()
 
     // Load the shader
     sf::Shader shader;
-    if (!shader.loadFromFile(useHlsl()  ? "resources/edge.hlsl"
-                             : useMsl() ? "resources/edge.metal"
-                                        : "resources/edge.frag",
+    if (!shader.loadFromFile(useSpirv()  ? "resources/edge-ps.spv"
+                             : useHlsl() ? "resources/edge.hlsl"
+                             : useMsl()  ? "resources/edge.metal"
+                                         : "resources/edge.frag",
                              sf::Shader::Type::Fragment))
         return std::nullopt;
 
@@ -386,11 +406,13 @@ std::optional<Geometry> tryLoadGeometry()
 
     // Load the shader
     sf::Shader shader;
-    if (useHlsl()
-            ? !shader.loadFromFile("resources/billboard-vs.hlsl",
-                                   "resources/billboard-gs.hlsl",
-                                   "resources/billboard-ps.hlsl")
-            : !shader.loadFromFile("resources/billboard.vert", "resources/billboard.geom", "resources/billboard.frag"))
+    if (useSpirv()  ? !shader.loadFromFile("resources/billboard-vs.spv",
+                                           "resources/billboard-gs.spv",
+                                           "resources/billboard-ps.spv")
+        : useHlsl() ? !shader.loadFromFile("resources/billboard-vs.hlsl",
+                                           "resources/billboard-gs.hlsl",
+                                           "resources/billboard-ps.hlsl")
+                    : !shader.loadFromFile("resources/billboard.vert", "resources/billboard.geom", "resources/billboard.frag"))
         return std::nullopt;
 
     shader.setUniform(currentTextureName(), sf::Shader::CurrentTexture);
@@ -412,7 +434,8 @@ std::optional<Geometry> tryLoadGeometry()
 ////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
-    // Use the platform's native renderer when it is available, pass "gl" to force OpenGL
+    // Use the platform's native renderer when it is available, pass "gl" to
+    // force OpenGL or "vulkan" to use the Vulkan renderer
     if (!(argc > 1 && std::string(argv[1]) == "gl"))
     {
 #ifdef SFML_SYSTEM_MACOS
@@ -420,9 +443,23 @@ int main(int argc, char* argv[])
 #else
         constexpr sf::Renderer nativeRenderer = sf::Renderer::Direct3D11;
 #endif
-        sf::setRenderer(nativeRenderer);
-        if (sf::getRenderer() != nativeRenderer)
-            std::cerr << "The native renderer is not available, running on OpenGL instead" << std::endl;
+        const sf::Renderer renderer = (argc > 1 && std::string(argv[1]) == "vulkan") ? sf::Renderer::Vulkan
+                                                                                     : nativeRenderer;
+        sf::setRenderer(renderer);
+        if (sf::getRenderer() != renderer)
+            std::cerr << "The requested renderer is not available, running on OpenGL instead" << std::endl;
+    }
+
+    // On Vulkan a second argument picks the shader source form: "spirv" (the
+    // default) loads the precompiled bytecode, "hlsl" the source text
+    if ((sf::getRenderer() == sf::Renderer::Vulkan) && (argc > 2) && (std::string(argv[2]) == "hlsl"))
+    {
+        if (sf::getShadingLanguage() == sf::ShadingLanguage::Hlsl)
+            vulkanUseSpirv = false;
+        else
+            std::cerr << "This build has no runtime shader compiler, using SPIR-V instead "
+                         "(rebuild with SFML_VULKAN_RUNTIME_SHADER_COMPILER=ON)"
+                      << std::endl;
     }
 
     // Exit early if shaders are not available
@@ -434,9 +471,11 @@ int main(int argc, char* argv[])
 
     // Create the main window
     sf::RenderWindow window(sf::VideoMode({800, 600}),
-                            useHlsl()  ? "SFML Shader (Direct3D 11)"
-                            : useMsl() ? "SFML Shader (Metal)"
-                                       : "SFML Shader (OpenGL)",
+                            sf::getRenderer() == sf::Renderer::Direct3D11 ? "SFML Shader (Direct3D 11)"
+                            : sf::getRenderer() == sf::Renderer::Metal    ? "SFML Shader (Metal)"
+                            : sf::getRenderer() == sf::Renderer::Vulkan
+                                ? (useSpirv() ? "SFML Shader (Vulkan, SPIR-V)" : "SFML Shader (Vulkan, HLSL)")
+                                : "SFML Shader (OpenGL)",
                             sf::Style::Titlebar | sf::Style::Close);
     window.setVerticalSyncEnabled(true);
 

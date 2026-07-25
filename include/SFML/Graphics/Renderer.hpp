@@ -46,7 +46,8 @@ enum class Renderer
 {
     OpenGL,     //!< OpenGL renderer, available on all platforms
     Direct3D11, //!< Direct3D 11 renderer, only available on Windows
-    Metal       //!< Metal renderer, only available on macOS
+    Metal,      //!< Metal renderer, only available on macOS
+    Vulkan      //!< Vulkan renderer, available on Windows and Linux with a Vulkan 1.2 driver
 };
 
 ////////////////////////////////////////////////////////////
@@ -56,8 +57,9 @@ enum class Renderer
 enum class ShadingLanguage
 {
     Glsl, //!< OpenGL Shading Language, consumed by the OpenGL renderer
-    Hlsl, //!< High-Level Shading Language, consumed by the Direct3D 11 renderer
-    Msl   //!< Metal Shading Language, consumed by the Metal renderer
+    Hlsl, //!< High-Level Shading Language, consumed by the Direct3D 11 renderer and, when SFML was built with the runtime shader compiler, the Vulkan renderer
+    Msl,  //!< Metal Shading Language, consumed by the Metal renderer
+    SpirV //!< SPIR-V bytecode compiled offline from HLSL, consumed by the Vulkan renderer without the runtime shader compiler
 };
 
 ////////////////////////////////////////////////////////////
@@ -139,8 +141,11 @@ SFML_GRAPHICS_API void setRenderer(Renderer renderer);
 ///
 /// The graphics module can render through different renderers.
 /// OpenGL is the default and is always available; additional
-/// renderers depend on the platform and build options:
-/// Direct3D 11 on Windows and Metal on macOS.
+/// renderers depend on the platform, the build options and the
+/// installed drivers: Direct3D 11 on Windows, Metal on macOS,
+/// and Vulkan on Windows and Linux systems whose driver
+/// supports Vulkan 1.2 (its availability is probed at run time,
+/// query it with `sf::isRendererAvailable`).
 ///
 /// The renderer has to be chosen up front, before any graphics
 /// resource is created:
@@ -162,11 +167,39 @@ SFML_GRAPHICS_API void setRenderer(Renderer renderer);
 /// indices 0 and 1 reserved for the vertex data and the SFML
 /// matrices.
 ///
+/// The Vulkan renderer is programmed in HLSL with a `main`
+/// entry point, in the same dialect the Direct3D 11 renderer
+/// consumes. By default `sf::Shader` accepts only SPIR-V
+/// bytecode compiled offline (`getShadingLanguage` returns
+/// `ShadingLanguage::SpirV`), for example with the DirectX
+/// shader compiler:
+/// \code
+/// dxc -spirv -fspv-target-env=vulkan1.2 -T ps_6_0 -E main shader.hlsl -Fo shader.spv
+/// \endcode
+/// When SFML was built with `SFML_VULKAN_RUNTIME_SHADER_COMPILER`
+/// enabled, HLSL source text is also accepted and compiled at
+/// run time (`getShadingLanguage` then returns
+/// `ShadingLanguage::Hlsl`); SPIR-V bytecode is recognized and
+/// accepted either way. The SFML matrices are consumed through
+/// `cbuffer SFMLMatrices : register(b0)` exactly like on the
+/// Direct3D 11 renderer, and `Texture2D`/`SamplerState` pairs
+/// are matched by register index, with `t0`/`s0` resolving to
+/// the draw's texture when no vertex or fragment stage is
+/// replaced.
+///
+/// Points drawn with user shaders keep the fixed Direct3D point
+/// size of 1.0 on the Vulkan renderer without any shader change.
+/// A vertex shader compiled offline for Vulkan alone may size
+/// points itself by writing the `PointSize` builtin through
+/// dxc's `[[vk::builtin("PointSize")]]` attribute; a geometry
+/// shader emitting points must not write it, points from a
+/// geometry stage always take the fixed size.
+///
 /// Note that the raw OpenGL interoperability functions in the
 /// `sf::OpenGL` namespace (saving and restoring states, binding
 /// resources for direct OpenGL use) only have an effect when
 /// the OpenGL renderer is active; their counterparts for the
-/// other renderers live in the `sf::D3D11` and `sf::Metal`
-/// namespaces.
+/// other renderers live in the `sf::D3D11`, `sf::Metal` and
+/// `sf::Vulkan` namespaces.
 ///
 ////////////////////////////////////////////////////////////

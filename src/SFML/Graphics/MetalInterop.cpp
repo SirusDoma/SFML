@@ -41,7 +41,7 @@
 namespace
 {
 // Never instantiated, re-exposes the protected resource accessors of the implementation base
-struct ImplAccess : sf::priv::RenderTargetImpl
+struct MetalImplAccess : sf::priv::RenderTargetImpl
 {
     using RenderTargetImpl::getId;
     using RenderTargetImpl::getImpl;
@@ -154,7 +154,7 @@ TexturePtr getTexture([[maybe_unused]] const Texture& texture)
 #ifdef SFML_ENABLE_METAL
     if (getMetalDevice())
     {
-        if (auto* impl = ImplAccess::getTextureImpl(texture))
+        if (auto* impl = MetalImplAccess::getTextureImpl(texture))
             return static_cast<priv::MetalTextureImpl*>(impl)->getTexture();
     }
 #endif
@@ -169,7 +169,7 @@ BufferPtr getBuffer([[maybe_unused]] const VertexBuffer& vertexBuffer)
 #ifdef SFML_ENABLE_METAL
     if (getMetalDevice())
     {
-        if (auto* impl = ImplAccess::getVertexBufferImpl(vertexBuffer))
+        if (auto* impl = MetalImplAccess::getVertexBufferImpl(vertexBuffer))
             return static_cast<priv::MetalVertexBufferImpl*>(impl)->getBuffer();
     }
 #endif
@@ -195,8 +195,8 @@ void flush()
 ////////////////////////////////////////////////////////////
 void resetStates(RenderTarget& target)
 {
-    if (auto* impl = ImplAccess::getImpl(target))
-        impl->resetStates(target, ImplAccess::getId(target));
+    if (auto* impl = MetalImplAccess::getImpl(target))
+        impl->resetStates(target, MetalImplAccess::getId(target));
 }
 
 } // namespace sf::Metal

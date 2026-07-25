@@ -88,6 +88,11 @@ bool useMsl()
     return sf::getShadingLanguage() == sf::ShadingLanguage::Msl;
 }
 
+bool useSpirv()
+{
+    return sf::getShadingLanguage() == sf::ShadingLanguage::SpirV;
+}
+
 
 ////////////////////////////////////////////////////////////
 /// Get the terrain elevation at the given coordinates.
@@ -443,7 +448,8 @@ void generateTerrain(sf::Vertex* buffer)
 ////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
-    // Use the platform's native renderer when it is available, pass "gl" to force OpenGL
+    // Use the platform's native renderer when it is available, pass "gl" to
+    // force OpenGL or "vulkan" to use the Vulkan renderer
     if (!(argc > 1 && std::string(argv[1]) == "gl"))
     {
 #ifdef SFML_SYSTEM_MACOS
@@ -451,16 +457,19 @@ int main(int argc, char* argv[])
 #else
         constexpr sf::Renderer nativeRenderer = sf::Renderer::Direct3D11;
 #endif
-        sf::setRenderer(nativeRenderer);
-        if (sf::getRenderer() != nativeRenderer)
-            std::cerr << "The native renderer is not available, running on OpenGL instead" << std::endl;
+        const sf::Renderer renderer = (argc > 1 && std::string(argv[1]) == "vulkan") ? sf::Renderer::Vulkan
+                                                                                     : nativeRenderer;
+        sf::setRenderer(renderer);
+        if (sf::getRenderer() != renderer)
+            std::cerr << "The requested renderer is not available, running on OpenGL instead" << std::endl;
     }
 
     // Create the window of the application
     sf::RenderWindow window(sf::VideoMode(windowSize),
-                            useHlsl()  ? "SFML Island (Direct3D 11)"
-                            : useMsl() ? "SFML Island (Metal)"
-                                       : "SFML Island (OpenGL)",
+                            sf::getRenderer() == sf::Renderer::Direct3D11 ? "SFML Island (Direct3D 11)"
+                            : sf::getRenderer() == sf::Renderer::Metal    ? "SFML Island (Metal)"
+                            : sf::getRenderer() == sf::Renderer::Vulkan   ? "SFML Island (Vulkan)"
+                                                                          : "SFML Island (OpenGL)",
                             sf::Style::Titlebar | sf::Style::Close);
     window.setVerticalSyncEnabled(true);
 
@@ -496,9 +505,10 @@ int main(int argc, char* argv[])
     {
         statusText.setString("Shaders and/or Vertex Buffers Unsupported");
     }
-    else if (useHlsl()  ? !terrainShader.loadFromFile("resources/terrain-vs.hlsl", "resources/terrain-ps.hlsl")
-             : useMsl() ? !terrainShader.loadFromFile("resources/terrain-vs.metal", "resources/terrain-ps.metal")
-                        : !terrainShader.loadFromFile("resources/terrain.vert", "resources/terrain.frag"))
+    else if (useSpirv() ? !terrainShader.loadFromFile("resources/terrain-vs.spv", "resources/terrain-ps.spv")
+             : useHlsl() ? !terrainShader.loadFromFile("resources/terrain-vs.hlsl", "resources/terrain-ps.hlsl")
+             : useMsl()  ? !terrainShader.loadFromFile("resources/terrain-vs.metal", "resources/terrain-ps.metal")
+                         : !terrainShader.loadFromFile("resources/terrain.vert", "resources/terrain.frag"))
     {
         statusText.setString("Failed to load shader program");
     }

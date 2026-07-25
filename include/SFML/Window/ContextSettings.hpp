@@ -157,6 +157,28 @@ struct ContextSettings
 /// windows; request `Auto` when the window contents have to be
 /// captured.
 ///
+/// <b>Special Note for Vulkan:</b>
+/// On the Vulkan renderer v-synced windows always present through
+/// the FIFO mode, the only paced mode every driver provides. With
+/// v-sync off, `Auto` and `Throughput` prefer the immediate mode
+/// (uncapped, may tear) and `LowLatency` prefers the mailbox mode,
+/// which replaces the queued frame with the newest one instead of
+/// lining up behind it; either falls back to the other and finally
+/// to FIFO when the driver does not offer it. `LowLatency`
+/// additionally allows only a single frame in flight and requests
+/// the shortest swapchain the surface supports, trading the deeper
+/// queue that absorbs frame time spikes for less input latency,
+/// and when the driver provides `VK_KHR_present_wait` its v-synced
+/// frames additionally pace to the moment the previous frame
+/// reached the screen, collapsing the presentation queue drivers
+/// keep between the present call and the display. Note that on
+/// current Windows drivers windowed swapchains commonly present
+/// through the desktop compositor while uncapped, adding about one
+/// compositor cycle of display latency regardless of the intent;
+/// v-synced windows present through hardware flip. Toggling v-sync
+/// re-creates the swapchain, which makes `setVerticalSyncEnabled`
+/// a heavier call than on the other renderers.
+///
 /// Please note that these values are only a hint.
 /// No failure will be reported if one or more of these values
 /// are not supported by the system; instead, SFML will try to

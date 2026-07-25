@@ -37,6 +37,10 @@
 #include <SFML/Graphics/Metal/MetalGraphicsDevice.hpp>
 #endif
 
+#ifdef SFML_ENABLE_VULKAN
+#include <SFML/Graphics/Vulkan/VulkanGraphicsDevice.hpp>
+#endif
+
 #include <SFML/System/Err.hpp>
 
 #include <algorithm>
@@ -104,6 +108,14 @@ std::shared_ptr<GraphicsDevice> ensureGraphicsDevice()
                 assert(false && "The Metal backend is not compiled in");
 #endif
                 break;
+            case Renderer::Vulkan:
+#ifdef SFML_ENABLE_VULKAN
+                device = std::make_shared<VulkanGraphicsDevice>();
+#else
+                // Unreachable, setRenderer only accepts available backends
+                assert(false && "The Vulkan backend is not compiled in");
+#endif
+                break;
         }
 
         weakDevice = device;
@@ -163,7 +175,7 @@ Renderer getRenderer()
 ////////////////////////////////////////////////////////////
 std::vector<Renderer> getAvailableRenderers()
 {
-    return {
+    std::vector<Renderer> renderers{
         Renderer::OpenGL,
 #ifdef SFML_ENABLE_D3D11
         Renderer::Direct3D11,
@@ -172,6 +184,15 @@ std::vector<Renderer> getAvailableRenderers()
         Renderer::Metal,
 #endif
     };
+
+#ifdef SFML_ENABLE_VULKAN
+    // Vulkan drivers may simply be absent, its availability is a run-time
+    // question; the probe runs once and its result is cached
+    if (priv::VulkanGraphicsDevice::isAvailable())
+        renderers.push_back(Renderer::Vulkan);
+#endif
+
+    return renderers;
 }
 
 
@@ -198,6 +219,12 @@ ShadingLanguage getShadingLanguage()
             return ShadingLanguage::Hlsl;
         case Renderer::Metal:
             return ShadingLanguage::Msl;
+        case Renderer::Vulkan:
+#ifdef SFML_VULKAN_RUNTIME_SHADER_COMPILER
+            return ShadingLanguage::Hlsl;
+#else
+            return ShadingLanguage::SpirV;
+#endif
         default:
             return ShadingLanguage::Glsl;
     }

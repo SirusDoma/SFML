@@ -135,6 +135,19 @@ if(SFML_OS_WINDOWS)
     sfml_set_option(SFML_ENABLE_D3D11 ON BOOL "ON to compile the Direct3D 11 graphics backend in addition to OpenGL")
 endif()
 
+# define options for the Vulkan graphics backend (Windows and Linux only)
+if(SFML_OS_WINDOWS OR SFML_OS_LINUX)
+    sfml_set_option(SFML_ENABLE_VULKAN ON BOOL "ON to compile the Vulkan graphics backend in addition to OpenGL")
+
+    # The examples demonstrate both Vulkan shader paths, building them defaults
+    # the runtime HLSL compiler in
+    if(SFML_BUILD_EXAMPLES)
+        sfml_set_option(SFML_VULKAN_RUNTIME_SHADER_COMPILER ON BOOL "ON to embed glslang into the Vulkan graphics backend so sf::Shader compiles HLSL source at run time")
+    else()
+        sfml_set_option(SFML_VULKAN_RUNTIME_SHADER_COMPILER OFF BOOL "ON to embed glslang into the Vulkan graphics backend so sf::Shader compiles HLSL source at run time")
+    endif()
+endif()
+
 # setup macOS stuff
 if(SFML_OS_MACOS)
     sfml_set_option(SFML_ENABLE_METAL ON BOOL "ON to compile the Metal graphics backend in addition to OpenGL")

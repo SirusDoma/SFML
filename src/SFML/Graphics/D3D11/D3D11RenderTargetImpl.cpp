@@ -286,11 +286,20 @@ void D3D11RenderTargetImpl::draw(RenderTarget&       target,
         }
         else
         {
-            m_device.appendPendingVertices(data,
-                                           vertexCount,
-                                           (type == PrimitiveType::Triangles) ? D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
-                                           : (type == PrimitiveType::Lines)   ? D3D11_PRIMITIVE_TOPOLOGY_LINELIST
-                                                                              : D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
+            // A trailing incomplete primitive is dropped by the rasterizer of a
+            // draw of its own, but merging would pair its vertices with the
+            // first ones of the next draw into a primitive that never existed
+            const std::size_t primitiveSize = (type == PrimitiveType::Triangles) ? 3
+                                              : (type == PrimitiveType::Lines)   ? 2
+                                                                                 : 1;
+            const std::size_t mergedCount = vertexCount - (vertexCount % primitiveSize);
+
+            if (mergedCount > 0)
+                m_device.appendPendingVertices(data,
+                                               mergedCount,
+                                               (type == PrimitiveType::Triangles) ? D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
+                                               : (type == PrimitiveType::Lines)   ? D3D11_PRIMITIVE_TOPOLOGY_LINELIST
+                                                                                  : D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
         }
     }
     else

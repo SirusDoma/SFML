@@ -136,7 +136,7 @@ jobs:
         rm -r './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/android'
         rm -r './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/projects'
         rm -r './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/include'
-        rm -r './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/vulkan/vulkan.h'
+        rm -r './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/vulkan_window/vulkan.h'
         rm -r './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/island/stb_perlin.h'
 
     - name: Packaging - Prepare Example Files for Windows
@@ -164,6 +164,7 @@ jobs:
         cp ./build/bin/text.exe './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/text'
         cp ./build/bin/voip.exe './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/voip'
         cp ./build/bin/vulkan.exe './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/vulkan'
+        cp ./build/bin/vulkan_window.exe './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/vulkan_window'
         cp ./build/bin/win32.exe './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/win32'
         cp ./build/bin/window.exe './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/window'
 
@@ -193,6 +194,7 @@ jobs:
         cp ./build/bin/text './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/text'
         cp ./build/bin/voip './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/voip'
         cp ./build/bin/vulkan './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/vulkan'
+        cp ./build/bin/vulkan_window './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/vulkan_window'
         cp ./build/bin/window './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/window'
 
     - name: Packaging - Prepare Example Files for macOS
@@ -220,7 +222,7 @@ jobs:
         cp ./build/bin/tennis './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/tennis'
         cp ./build/bin/text './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/text'
         cp ./build/bin/voip './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/voip'
-        cp ./build/bin/vulkan './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/vulkan'
+        cp ./build/bin/vulkan_window './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/vulkan_window'
         cp ./build/bin/window './SFML-${{ matrix.platform.name }}-${{ matrix.config.name }}-${{ matrix.type.name }}/examples/window'
 
     - name: Packaging - Create Archive

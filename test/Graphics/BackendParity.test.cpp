@@ -17,13 +17,23 @@
 #include <array>
 #include <string_view>
 
+// The Vulkan parity shaders are precompiled to SPIR-V at build time when the
+// shader compiler was found, exercising the bytecode path applications use
+#ifdef SFML_TEST_VULKAN_SPIRV_SHADERS
+#include <VulkanFlatFragmentShader.hpp>
+#include <VulkanMatricesVertexShader.hpp>
+#include <VulkanSampleFragmentShader.hpp>
+#include <VulkanTintFragmentShader.hpp>
+#endif
+
 namespace
 {
 ////////////////////////////////////////////////////////////
 // The same rendering checks run on every backend: the default
 // one, Direct3D 11 when this file is compiled into the
-// test-sfml-graphics-d3d11 target, and Metal when compiled
-// into the test-sfml-graphics-metal target.
+// test-sfml-graphics-d3d11 target, Metal when compiled into
+// the test-sfml-graphics-metal target, and Vulkan when
+// compiled into the test-sfml-graphics-vulkan target.
 ////////////////////////////////////////////////////////////
 bool selectBackend()
 {
@@ -33,6 +43,9 @@ bool selectBackend()
 #elif defined(SFML_TEST_BACKEND_METAL)
     sf::setRenderer(sf::Renderer::Metal);
     return sf::getRenderer() == sf::Renderer::Metal;
+#elif defined(SFML_TEST_BACKEND_VULKAN)
+    sf::setRenderer(sf::Renderer::Vulkan);
+    return sf::getRenderer() == sf::Renderer::Vulkan;
 #else
     return true;
 #endif
@@ -170,8 +183,66 @@ fragment float4 flat(FragmentInput input [[stage_in]])
 }
 )";
 
-// Pick the shader source matching the shading language of the selected backend
-std::string_view selectShader(std::string_view glsl, std::string_view hlsl, std::string_view msl)
+constexpr std::string_view sampleFragmentGlsl = R"(
+uniform sampler2D texture;
+
+void main()
+{
+    gl_FragColor = texture2D(texture, gl_TexCoord[0].xy);
+}
+)";
+
+constexpr std::string_view sampleFragmentHlsl = R"(
+Texture2D    tex        : register(t0);
+SamplerState texSampler : register(s0);
+
+struct PSInput
+{
+    float4 position  : SV_POSITION;
+    float4 color     : COLOR0;
+    float2 texCoords : TEXCOORD0;
+};
+
+float4 main(PSInput input) : SV_TARGET
+{
+    return tex.Sample(texSampler, input.texCoords);
+}
+)";
+
+constexpr std::string_view sampleFragmentMsl = R"(
+#include <metal_stdlib>
+using namespace metal;
+
+struct FragmentInput
+{
+    float4 position [[position]];
+    float4 color;
+    float2 texCoords;
+};
+
+fragment float4 sampleTexture(FragmentInput input [[stage_in]],
+                              texture2d<float> tex [[texture(0)]],
+                              sampler texSampler [[sampler(0)]])
+{
+    return tex.sample(texSampler, input.texCoords);
+}
+)";
+
+// View precompiled SPIR-V words as the bytes sf::Shader consumes
+template <std::size_t N>
+std::string_view spirvView([[maybe_unused]] const std::uint32_t (&words)[N])
+{
+#ifdef SFML_TEST_VULKAN_SPIRV_SHADERS
+    return {reinterpret_cast<const char*>(words), N * sizeof(std::uint32_t)};
+#else
+    return {};
+#endif
+}
+
+// Pick the shader source matching the shading language of the selected backend.
+// SPIR-V bytecode is only available when the shader compiler was found at build
+// time; tests that need it skip otherwise.
+std::string_view selectShader(std::string_view glsl, std::string_view hlsl, std::string_view msl, std::string_view spirv = {})
 {
     switch (sf::getShadingLanguage())
     {
@@ -179,9 +250,37 @@ std::string_view selectShader(std::string_view glsl, std::string_view hlsl, std:
             return hlsl;
         case sf::ShadingLanguage::Msl:
             return msl;
+        case sf::ShadingLanguage::SpirV:
+            return spirv;
         default:
             return glsl;
     }
+}
+
+// The parity SPIR-V blobs, empty when the build had no shader compiler
+#ifdef SFML_TEST_VULKAN_SPIRV_SHADERS
+const std::string_view tintFragmentSpirv   = spirvView(vulkanTintFragmentShaderSpirv);
+const std::string_view matricesVertexSpirv = spirvView(vulkanMatricesVertexShaderSpirv);
+const std::string_view flatFragmentSpirv   = spirvView(vulkanFlatFragmentShaderSpirv);
+const std::string_view sampleFragmentSpirv = spirvView(vulkanSampleFragmentShaderSpirv);
+#else
+constexpr std::string_view tintFragmentSpirv;
+constexpr std::string_view matricesVertexSpirv;
+constexpr std::string_view flatFragmentSpirv;
+constexpr std::string_view sampleFragmentSpirv;
+#endif
+
+// Name the draw's texture is bound to, "texture" being a reserved HLSL word
+const char* currentTextureName()
+{
+    const sf::ShadingLanguage language = sf::getShadingLanguage();
+    return ((language == sf::ShadingLanguage::Hlsl) || (language == sf::ShadingLanguage::SpirV)) ? "tex" : "texture";
+}
+
+// Tell whether the shader sections cannot run for lack of sources
+bool shaderSourcesUnavailable()
+{
+    return (sf::getShadingLanguage() == sf::ShadingLanguage::SpirV) && tintFragmentSpirv.empty();
 }
 
 std::array<sf::Vertex, 6> makeQuad(sf::Vector2f position, sf::Vector2f size, sf::Color color)
@@ -226,6 +325,59 @@ TEST_CASE("[Graphics] Backend rendering parity", runDisplayTests())
         const sf::Image image = render(target);
         CHECK(image.getPixel({50, 50}) == sf::Color::Red);
         CHECK(image.getPixel({5, 5}) == sf::Color::Blue);
+    }
+
+    SECTION("Consecutive draws with an incomplete trailing primitive")
+    {
+        target.clear(sf::Color::Black);
+
+        // Each draw leaves a dangling third vertex that completes no line. A
+        // backend that collects draws must not pair it with the first vertex
+        // of the next one into a line that was never asked for.
+        // Coordinates sit on pixel centres so every backend's line rasterizer
+        // covers the same row, whatever its fill convention
+        const std::array left  = {sf::Vertex{{10.5f, 20.5f}, sf::Color::Red},
+                                  sf::Vertex{{40.5f, 20.5f}, sf::Color::Red},
+                                  sf::Vertex{{10.5f, 50.5f}, sf::Color::Red}};
+        const std::array right = {sf::Vertex{{60.5f, 80.5f}, sf::Color::Red},
+                                  sf::Vertex{{90.5f, 80.5f}, sf::Color::Red},
+                                  sf::Vertex{{60.5f, 95.5f}, sf::Color::Red}};
+
+        target.draw(left.data(), left.size(), sf::PrimitiveType::Lines);
+        target.draw(right.data(), right.size(), sf::PrimitiveType::Lines);
+
+        const sf::Image image = render(target);
+
+        // The two complete lines are drawn
+        CHECK(image.getPixel({25, 20}) == sf::Color::Red);
+        CHECK(image.getPixel({75, 80}) == sf::Color::Red);
+
+        // The phantom line would run from the dangling (10.5, 50.5) to
+        // (60.5, 80.5), passing through its midpoint
+        CHECK(image.getPixel({35, 65}) == sf::Color::Black);
+    }
+
+    SECTION("Render texture resized between draws")
+    {
+        sf::RenderTexture inner(sf::Vector2u(64, 64));
+        inner.clear(sf::Color::Yellow);
+        inner.display();
+
+        // A draw is in flight on the main target when the other one is
+        // re-created, which re-creates its attachment image mid-frame
+        target.clear(sf::Color::Black);
+        const auto quad = makeQuad({0, 0}, {50, 100}, sf::Color::Blue);
+        target.draw(quad.data(), quad.size(), sf::PrimitiveType::Triangles);
+
+        REQUIRE(inner.resize(sf::Vector2u(32, 32)));
+
+        inner.clear(sf::Color::Green);
+        inner.display();
+        CHECK(inner.getTexture().copyToImage().getPixel({16, 16}) == sf::Color::Green);
+
+        const sf::Image image = render(target);
+        CHECK(image.getPixel({25, 50}) == sf::Color::Blue);
+        CHECK(image.getPixel({75, 50}) == sf::Color::Black);
     }
 
     SECTION("Triangle fan")
@@ -303,6 +455,59 @@ TEST_CASE("[Graphics] Backend rendering parity", runDisplayTests())
         CHECK(image.getPixel({15, 15}) == sf::Color::Red);
         CHECK(image.getPixel({25, 25}) == sf::Color::Green);
         CHECK(image.getPixel({50, 50}) == sf::Color::Blue);
+    }
+
+    SECTION("Scissored clear after a draw under the same view")
+    {
+        target.clear(sf::Color::Black);
+
+        sf::View view = target.getDefaultView();
+        view.setScissor(sf::FloatRect({0, 0}, {0.5f, 1}));
+        target.setView(view);
+
+        // Nothing changes state between the draw and the clear, so a backend
+        // that collects draws has to flush them itself: the clear comes after
+        // the quad and has to land on top of it
+        const auto quad = makeQuad({0, 0}, {100, 100}, sf::Color::Red);
+        target.draw(quad.data(), quad.size(), sf::PrimitiveType::Triangles);
+        target.clear(sf::Color::Green);
+
+        target.setView(target.getDefaultView());
+
+        const sf::Image image = render(target);
+        CHECK(image.getPixel({25, 50}) == sf::Color::Green);
+        CHECK(image.getPixel({75, 50}) == sf::Color::Black);
+    }
+
+    SECTION("Texture changes between draws with the same shader")
+    {
+        if (shaderSourcesUnavailable())
+            SKIP("No shader compiler was found at build time");
+
+        sf::Shader shader;
+        REQUIRE(shader.loadFromMemory(selectShader(sampleFragmentGlsl, sampleFragmentHlsl, sampleFragmentMsl, sampleFragmentSpirv),
+                                      sf::Shader::Type::Fragment));
+        shader.setUniform(currentTextureName(), sf::Shader::CurrentTexture);
+
+        const sf::Texture redTexture(sf::Image(sf::Vector2u(4, 4), sf::Color::Red));
+        const sf::Texture blueTexture(sf::Image(sf::Vector2u(4, 4), sf::Color::Blue));
+
+        target.clear(sf::Color::Black);
+
+        // Only the texture changes between the two draws: the shader, the
+        // blending and the geometry stay the same, so a backend that keys its
+        // resource binding on the shader alone keeps sampling the first one
+        sf::Sprite sprite(redTexture);
+        sprite.setScale({10.f, 10.f});
+        target.draw(sprite, sf::RenderStates(&shader));
+
+        sprite.setTexture(blueTexture, true);
+        sprite.setPosition({50, 0});
+        target.draw(sprite, sf::RenderStates(&shader));
+
+        const sf::Image image = render(target);
+        CHECK(image.getPixel({20, 20}) == sf::Color::Red);
+        CHECK(image.getPixel({70, 20}) == sf::Color::Blue);
     }
 
     SECTION("Scissored clear")
@@ -394,8 +599,11 @@ TEST_CASE("[Graphics] Backend rendering parity", runDisplayTests())
 
     SECTION("Fragment shader tint")
     {
+        if (shaderSourcesUnavailable())
+            SKIP("No shader compiler was found at build time");
+
         sf::Shader shader;
-        REQUIRE(shader.loadFromMemory(selectShader(tintFragmentGlsl, tintFragmentHlsl, tintFragmentMsl),
+        REQUIRE(shader.loadFromMemory(selectShader(tintFragmentGlsl, tintFragmentHlsl, tintFragmentMsl, tintFragmentSpirv),
                                       sf::Shader::Type::Fragment));
 
         target.clear(sf::Color::Black);
@@ -407,8 +615,11 @@ TEST_CASE("[Graphics] Backend rendering parity", runDisplayTests())
 
     SECTION("Blend mode changes between draws with the same shader")
     {
+        if (shaderSourcesUnavailable())
+            SKIP("No shader compiler was found at build time");
+
         sf::Shader shader;
-        REQUIRE(shader.loadFromMemory(selectShader(flatFragmentGlsl, flatFragmentHlsl, flatFragmentMsl),
+        REQUIRE(shader.loadFromMemory(selectShader(flatFragmentGlsl, flatFragmentHlsl, flatFragmentMsl, flatFragmentSpirv),
                                       sf::Shader::Type::Fragment));
 
         target.clear(sf::Color::Red);
@@ -423,6 +634,34 @@ TEST_CASE("[Graphics] Backend rendering parity", runDisplayTests())
         states.blendMode = sf::BlendNone;
         target.draw(quad.data(), quad.size(), sf::PrimitiveType::Triangles, states);
         CHECK(render(target).getPixel({50, 50}) == sf::Color::Green);
+    }
+
+    SECTION("Draw with a shader that failed to load after a working one")
+    {
+        if (shaderSourcesUnavailable())
+            SKIP("No shader compiler was found at build time");
+
+        sf::Shader working;
+        REQUIRE(working.loadFromMemory(selectShader(tintFragmentGlsl, tintFragmentHlsl, tintFragmentMsl, tintFragmentSpirv),
+                                       sf::Shader::Type::Fragment));
+
+        sf::Shader broken;
+        REQUIRE_FALSE(broken.loadFromMemory("this is not a shader", sf::Shader::Type::Fragment));
+
+        target.clear(sf::Color::Black);
+
+        // The tint shader turns the left half green
+        const auto left = makeQuad({0, 0}, {50, 100}, sf::Color::White);
+        target.draw(left.data(), left.size(), sf::PrimitiveType::Triangles, sf::RenderStates(&working));
+
+        // The right half asked for a shader that does not exist, so it draws
+        // with the built-in pipeline rather than inheriting the previous one
+        const auto right = makeQuad({50, 0}, {50, 100}, sf::Color::White);
+        target.draw(right.data(), right.size(), sf::PrimitiveType::Triangles, sf::RenderStates(&broken));
+
+        const sf::Image image = render(target);
+        CHECK(image.getPixel({25, 50}) == sf::Color::Green);
+        CHECK(image.getPixel({75, 50}) == sf::Color::White);
     }
 
     SECTION("Vertex buffer")
@@ -444,9 +683,13 @@ TEST_CASE("[Graphics] Backend rendering parity", runDisplayTests())
 
         SECTION("Draw with a user shader")
         {
+            if (shaderSourcesUnavailable())
+                SKIP("No shader compiler was found at build time");
+
             sf::Shader shader;
-            REQUIRE(shader.loadFromMemory(selectShader(matricesVertexGlsl, matricesVertexHlsl, matricesVertexMsl),
-                                          selectShader(flatFragmentGlsl, flatFragmentHlsl, flatFragmentMsl)));
+            REQUIRE(
+                shader.loadFromMemory(selectShader(matricesVertexGlsl, matricesVertexHlsl, matricesVertexMsl, matricesVertexSpirv),
+                                      selectShader(flatFragmentGlsl, flatFragmentHlsl, flatFragmentMsl, flatFragmentSpirv)));
 
             target.clear(sf::Color::Blue);
             target.draw(buffer, sf::RenderStates(&shader));
@@ -546,7 +789,7 @@ TEST_CASE("[Graphics] Backend rendering parity", runDisplayTests())
                 CHECK(texture.copyToImage().getPixel({60, 45}) == sf::Color::Green);
             }
 
-#if defined(SFML_TEST_BACKEND_D3D11) || defined(SFML_TEST_BACKEND_METAL)
+#if defined(SFML_TEST_BACKEND_D3D11) || defined(SFML_TEST_BACKEND_METAL) || defined(SFML_TEST_BACKEND_VULKAN)
             // The achieved presentation path is reported back, only an explicit
             // low-latency request selects the low-latency path
             if (presentation == sf::ContextSettings::Presentation::LowLatency)

@@ -59,6 +59,7 @@
 #include <SFML/Graphics/VertexArray.hpp>
 #include <SFML/Graphics/VertexBuffer.hpp>
 #include <SFML/Graphics/View.hpp>
+#include <SFML/Graphics/VulkanInterop.hpp>
 
 #include <SFML/Window.hpp>
 

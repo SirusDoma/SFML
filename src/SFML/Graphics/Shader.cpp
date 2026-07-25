@@ -37,6 +37,7 @@
 
 #include <fstream>
 #include <ostream>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -62,6 +63,14 @@ bool getFileContents(const std::filesystem::path& filename, std::vector<char>& b
     }
 
     return false;
+}
+
+// View the contents of a read shader buffer, excluding the appended terminator.
+// The explicit length keeps binary sources like SPIR-V intact, they contain
+// zero bytes a C-string conversion would truncate at.
+std::string_view contentsToView(const std::vector<char>& buffer)
+{
+    return buffer.empty() ? std::string_view() : std::string_view(buffer.data(), buffer.size() - 1);
 }
 
 // Read the contents of a stream into an array of char
@@ -213,12 +222,12 @@ bool Shader::loadFromFile(const std::filesystem::path& filename, Type type)
 
     // Compile the shader program
     if (type == Type::Vertex)
-        return compile(shader.data(), {}, {});
+        return compile(contentsToView(shader), {}, {});
 
     if (type == Type::Geometry)
-        return compile({}, shader.data(), {});
+        return compile({}, contentsToView(shader), {});
 
-    return compile({}, {}, shader.data());
+    return compile({}, {}, contentsToView(shader));
 }
 
 
@@ -243,7 +252,7 @@ bool Shader::loadFromFile(const std::filesystem::path& vertexShaderFilename,
     }
 
     // Compile the shader program
-    return compile(vertexShader.data(), {}, fragmentShader.data());
+    return compile(contentsToView(vertexShader), {}, contentsToView(fragmentShader));
 }
 
 
@@ -277,7 +286,7 @@ bool Shader::loadFromFile(const std::filesystem::path& vertexShaderFilename,
     }
 
     // Compile the shader program
-    return compile(vertexShader.data(), geometryShader.data(), fragmentShader.data());
+    return compile(contentsToView(vertexShader), contentsToView(geometryShader), contentsToView(fragmentShader));
 }
 
 
@@ -324,12 +333,12 @@ bool Shader::loadFromStream(InputStream& stream, Type type)
 
     // Compile the shader program
     if (type == Type::Vertex)
-        return compile(shader.data(), {}, {});
+        return compile(contentsToView(shader), {}, {});
 
     if (type == Type::Geometry)
-        return compile({}, shader.data(), {});
+        return compile({}, contentsToView(shader), {});
 
-    return compile({}, {}, shader.data());
+    return compile({}, {}, contentsToView(shader));
 }
 
 
@@ -353,7 +362,7 @@ bool Shader::loadFromStream(InputStream& vertexShaderStream, InputStream& fragme
     }
 
     // Compile the shader program
-    return compile(vertexShader.data(), {}, fragmentShader.data());
+    return compile(contentsToView(vertexShader), {}, contentsToView(fragmentShader));
 }
 
 
@@ -385,7 +394,7 @@ bool Shader::loadFromStream(InputStream& vertexShaderStream, InputStream& geomet
     }
 
     // Compile the shader program
-    return compile(vertexShader.data(), geometryShader.data(), fragmentShader.data());
+    return compile(contentsToView(vertexShader), contentsToView(geometryShader), contentsToView(fragmentShader));
 }
 
 

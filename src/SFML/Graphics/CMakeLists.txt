@@ -56,6 +56,8 @@ set(SRC
     ${SRCROOT}/View.cpp
     ${INCROOT}/View.hpp
     ${INCROOT}/Vertex.hpp
+    ${INCROOT}/VulkanInterop.hpp
+    ${SRCROOT}/VulkanInterop.cpp
 )
 source_group("" FILES ${SRC})
 
@@ -203,9 +205,79 @@ if(SFML_OS_MACOS AND SFML_ENABLE_METAL)
 endif()
 
 
+# Vulkan backend sources
+if((SFML_OS_WINDOWS OR SFML_OS_LINUX) AND SFML_ENABLE_VULKAN)
+    set(VULKAN_SRC
+        ${SRCROOT}/Vulkan/VulkanGraphicsDevice.cpp
+        ${SRCROOT}/Vulkan/VulkanGraphicsDevice.hpp
+        ${SRCROOT}/Vulkan/VulkanMemoryAllocatorImpl.cpp
+        ${SRCROOT}/Vulkan/VulkanRenderTargetImpl.cpp
+        ${SRCROOT}/Vulkan/VulkanRenderTargetImpl.hpp
+        ${SRCROOT}/Vulkan/VulkanRenderTextureImpl.cpp
+        ${SRCROOT}/Vulkan/VulkanRenderTextureImpl.hpp
+        ${SRCROOT}/Vulkan/VulkanRenderWindowImpl.cpp
+        ${SRCROOT}/Vulkan/VulkanRenderWindowImpl.hpp
+        ${SRCROOT}/Vulkan/VulkanShaderImpl.cpp
+        ${SRCROOT}/Vulkan/VulkanShaderImpl.hpp
+        ${SRCROOT}/Vulkan/VulkanTextureImpl.cpp
+        ${SRCROOT}/Vulkan/VulkanTextureImpl.hpp
+        ${SRCROOT}/Vulkan/VulkanUtils.cpp
+        ${SRCROOT}/Vulkan/VulkanUtils.hpp
+        ${SRCROOT}/Vulkan/VulkanVertexBufferImpl.cpp
+        ${SRCROOT}/Vulkan/VulkanVertexBufferImpl.hpp
+        ${SRCROOT}/Vulkan/VulkanDefaultShaderSpirv.hpp
+        ${SRCROOT}/Vulkan/DefaultShader.hlsl
+        ${PROJECT_SOURCE_DIR}/extlibs/headers/spirv-reflect/spirv_reflect.c
+    )
+    source_group("vulkan" FILES ${VULKAN_SRC})
+    set_source_files_properties(${SRCROOT}/Vulkan/DefaultShader.hlsl PROPERTIES HEADER_FILE_ONLY TRUE)
+
+    # Silence third-party warnings in the reflection library
+    if(SFML_COMPILER_MSVC)
+        set_source_files_properties(${PROJECT_SOURCE_DIR}/extlibs/headers/spirv-reflect/spirv_reflect.c PROPERTIES COMPILE_OPTIONS /w)
+    else()
+        set_source_files_properties(${PROJECT_SOURCE_DIR}/extlibs/headers/spirv-reflect/spirv_reflect.c PROPERTIES COMPILE_OPTIONS -w)
+    endif()
+
+    # The built-in shaders are compiled to SPIR-V at build time when the DirectX
+    # shader compiler is available, otherwise committed bytecode is used. The
+    # Vulkan SDK copy is preferred: the one in the Windows SDK lacks the SPIR-V
+    # backend, which the probe below weeds out.
+    # The SDK capitalises the directory on Windows and not on Linux, where the
+    # lookup is case sensitive
+    find_program(SFML_VULKAN_DXC_COMPILER dxc HINTS "$ENV{VULKAN_SDK}/Bin" "$ENV{VULKAN_SDK}/bin")
+    set(SFML_VULKAN_DXC ${SFML_VULKAN_DXC_COMPILER})
+    if(SFML_VULKAN_DXC)
+        execute_process(COMMAND ${SFML_VULKAN_DXC} -spirv -fspv-target-env=vulkan1.2 -T ps_6_0 -E PSMain ${SRCROOT}/Vulkan/DefaultShader.hlsl -Fo ${CMAKE_CURRENT_BINARY_DIR}/VulkanDxcProbe.spv
+                        RESULT_VARIABLE SFML_VULKAN_DXC_PROBE
+                        OUTPUT_QUIET ERROR_QUIET)
+        if(NOT SFML_VULKAN_DXC_PROBE EQUAL 0)
+            message(STATUS "Found dxc without SPIR-V support, the built-in Vulkan shaders use the committed bytecode")
+            set(SFML_VULKAN_DXC "")
+        endif()
+    endif()
+    if(SFML_VULKAN_DXC)
+        set(SFML_VULKAN_DXC_FLAGS -spirv -fspv-target-env=vulkan1.2 -fvk-b-shift 0 all -fvk-t-shift 16 all -fvk-s-shift 32 all)
+        add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/VulkanDefaultVertexShader.hpp
+                           COMMAND ${SFML_VULKAN_DXC} ${SFML_VULKAN_DXC_FLAGS} -T vs_6_0 -E VSMain ${SRCROOT}/Vulkan/DefaultShader.hlsl -Fo ${CMAKE_CURRENT_BINARY_DIR}/VulkanDefaultVertexShader.spv
+                           COMMAND ${CMAKE_COMMAND} -DINPUT=${CMAKE_CURRENT_BINARY_DIR}/VulkanDefaultVertexShader.spv -DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/VulkanDefaultVertexShader.hpp -DVARIABLE=defaultVertexShaderSpirv -P ${PROJECT_SOURCE_DIR}/tools/vulkan/EmbedSpirv.cmake
+                           DEPENDS ${SRCROOT}/Vulkan/DefaultShader.hlsl ${PROJECT_SOURCE_DIR}/tools/vulkan/EmbedSpirv.cmake
+                           COMMENT "Compiling the built-in Vulkan vertex shader")
+        add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/VulkanDefaultFragmentShader.hpp
+                           COMMAND ${SFML_VULKAN_DXC} ${SFML_VULKAN_DXC_FLAGS} -T ps_6_0 -E PSMain ${SRCROOT}/Vulkan/DefaultShader.hlsl -Fo ${CMAKE_CURRENT_BINARY_DIR}/VulkanDefaultFragmentShader.spv
+                           COMMAND ${CMAKE_COMMAND} -DINPUT=${CMAKE_CURRENT_BINARY_DIR}/VulkanDefaultFragmentShader.spv -DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/VulkanDefaultFragmentShader.hpp -DVARIABLE=defaultFragmentShaderSpirv -P ${PROJECT_SOURCE_DIR}/tools/vulkan/EmbedSpirv.cmake
+                           DEPENDS ${SRCROOT}/Vulkan/DefaultShader.hlsl ${PROJECT_SOURCE_DIR}/tools/vulkan/EmbedSpirv.cmake
+                           COMMENT "Compiling the built-in Vulkan fragment shader")
+        list(APPEND VULKAN_SRC
+            ${CMAKE_CURRENT_BINARY_DIR}/VulkanDefaultVertexShader.hpp
+            ${CMAKE_CURRENT_BINARY_DIR}/VulkanDefaultFragmentShader.hpp)
+    endif()
+endif()
+
+
 # define the sfml-graphics target
 sfml_add_library(Graphics
-                 SOURCES ${SRC} ${DRAWABLES_SRC} ${OPENGL_SRC} ${D3D11_SRC} ${METAL_SRC}
+                 SOURCES ${SRC} ${DRAWABLES_SRC} ${OPENGL_SRC} ${D3D11_SRC} ${METAL_SRC} ${VULKAN_SRC}
                  DEPENDENCIES "Dependencies.cmake.in")
 
 # Direct3D 11 backend dependencies
@@ -239,6 +311,70 @@ if(SFML_OS_MACOS AND SFML_ENABLE_METAL)
 
     if(NOT SFML_METAL_COMPILER_MISSING)
         target_compile_definitions(sfml-graphics PRIVATE "SFML_METAL_PRECOMPILED_SHADERS")
+    endif()
+endif()
+
+# Vulkan backend dependencies: nothing links against the Vulkan loader, every
+# entry point is resolved at run time through the loader the window module opens
+if((SFML_OS_WINDOWS OR SFML_OS_LINUX) AND SFML_ENABLE_VULKAN)
+    target_compile_definitions(sfml-graphics PRIVATE
+        "SFML_ENABLE_VULKAN"
+        "VMA_STATIC_VULKAN_FUNCTIONS=0"
+        "VMA_DYNAMIC_VULKAN_FUNCTIONS=0")
+    target_include_directories(sfml-graphics SYSTEM PRIVATE "${PROJECT_SOURCE_DIR}/extlibs/headers")
+    target_include_directories(sfml-graphics PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
+    if(SFML_VULKAN_DXC)
+        target_compile_definitions(sfml-graphics PRIVATE "SFML_VULKAN_PRECOMPILED_SHADERS")
+    endif()
+
+    # The optional runtime HLSL compiler is glslang, statically linked so
+    # shipping stays a single binary
+    if(SFML_VULKAN_RUNTIME_SHADER_COMPILER)
+        target_compile_definitions(sfml-graphics PRIVATE "SFML_VULKAN_RUNTIME_SHADER_COMPILER")
+
+        # use a block to scope option variables we have to set
+        block()
+            include(FetchContent)
+
+            set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+            set(BUILD_SHARED_LIBS OFF)
+
+            # glslang has to use the same runtime as the rest of SFML, or the
+            # static standard library option ends in a linker mismatch
+            if(SFML_USE_STATIC_STD_LIBS)
+                set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+            endif()
+
+            set(ENABLE_OPT OFF)
+            set(ENABLE_HLSL ON)
+            set(ENABLE_GLSLANG_BINARIES OFF)
+            set(ENABLE_SPVREMAPPER OFF)
+            set(GLSLANG_TESTS OFF)
+            set(GLSLANG_ENABLE_INSTALL OFF)
+
+            FetchContent_Declare(glslang
+                GIT_REPOSITORY https://github.com/KhronosGroup/glslang.git
+                GIT_TAG 15.4.0
+                GIT_SHALLOW ON)
+            FetchContent_MakeAvailable(glslang)
+        endblock()
+
+        set_target_properties(glslang SPIRV glslang-default-resource-limits PROPERTIES FOLDER "Dependencies")
+
+        if(BUILD_SHARED_LIBS OR SFML_OS_ANDROID)
+            set_target_properties(glslang SPIRV glslang-default-resource-limits PROPERTIES POSITION_INDEPENDENT_CODE ON)
+        endif()
+
+        target_link_libraries(sfml-graphics PRIVATE glslang SPIRV glslang-default-resource-limits)
+
+        # Static consumers link the compiler archives too, ship them in the
+        # export set alongside sfml-graphics
+        if(NOT BUILD_SHARED_LIBS)
+            install(TARGETS glslang SPIRV glslang-default-resource-limits
+                    EXPORT SFMLGraphicsStaticTargets
+                    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT devel)
+        endif()
     endif()
 endif()
 

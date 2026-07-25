@@ -1,10 +1,10 @@
 # all source files
-set(SRC Vulkan.cpp)
+set(SRC VulkanInterop.cpp)
 
-# define the window target
+# define the vulkan target
 sfml_add_example(vulkan GUI_APP
                  SOURCES ${SRC}
                  DEPENDS SFML::Graphics)
 
-# external dependency headers
-target_include_directories(vulkan SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/examples/vulkan)
+# reuse the GLAD Vulkan loader header of the window module's vulkan_window example
+target_include_directories(vulkan SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/examples/vulkan_window)

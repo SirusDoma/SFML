@@ -65,6 +65,45 @@ if(SFML_OS_MACOS AND SFML_ENABLE_METAL)
     endif()
 endif()
 
+# Run the same rendering checks on the Vulkan backend
+if((SFML_OS_WINDOWS OR SFML_OS_LINUX) AND SFML_ENABLE_VULKAN)
+    sfml_add_test(test-sfml-graphics-vulkan "BackendParity.test.cpp" SFML::Graphics)
+    target_compile_definitions(test-sfml-graphics-vulkan PRIVATE SFML_TEST_BACKEND_VULKAN)
+    if(SFML_RUN_DISPLAY_TESTS)
+        target_compile_definitions(test-sfml-graphics-vulkan PRIVATE SFML_RUN_DISPLAY_TESTS)
+    endif()
+
+    # Without the runtime shader compiler the parity shaders are consumed as
+    # SPIR-V, compiled at build time the same way applications compile theirs
+    find_program(SFML_VULKAN_TEST_DXC_COMPILER dxc HINTS "$ENV{VULKAN_SDK}/Bin" "$ENV{VULKAN_SDK}/bin")
+    set(SFML_VULKAN_TEST_DXC ${SFML_VULKAN_TEST_DXC_COMPILER})
+    if(SFML_VULKAN_TEST_DXC)
+        execute_process(COMMAND ${SFML_VULKAN_TEST_DXC} -spirv -fspv-target-env=vulkan1.2 -T ps_6_0 -E main ${CMAKE_CURRENT_SOURCE_DIR}/vulkan/FlatFragment.hlsl -Fo ${CMAKE_CURRENT_BINARY_DIR}/VulkanDxcProbe.spv
+                        RESULT_VARIABLE SFML_VULKAN_TEST_DXC_PROBE
+                        OUTPUT_QUIET ERROR_QUIET)
+        if(NOT SFML_VULKAN_TEST_DXC_PROBE EQUAL 0)
+            set(SFML_VULKAN_TEST_DXC "")
+        endif()
+    endif()
+    if(SFML_VULKAN_TEST_DXC)
+        set(SFML_VULKAN_TEST_SHADER_HEADERS "")
+        foreach(SHADER IN ITEMS TintFragment:ps_6_0 MatricesVertex:vs_6_0 FlatFragment:ps_6_0 SampleFragment:ps_6_0)
+            string(REPLACE ":" ";" SHADER "${SHADER}")
+            list(GET SHADER 0 SHADER_NAME)
+            list(GET SHADER 1 SHADER_PROFILE)
+            add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/Vulkan${SHADER_NAME}Shader.hpp
+                               COMMAND ${SFML_VULKAN_TEST_DXC} -spirv -fspv-target-env=vulkan1.2 -T ${SHADER_PROFILE} -E main ${CMAKE_CURRENT_SOURCE_DIR}/vulkan/${SHADER_NAME}.hlsl -Fo ${CMAKE_CURRENT_BINARY_DIR}/Vulkan${SHADER_NAME}Shader.spv
+                               COMMAND ${CMAKE_COMMAND} -DINPUT=${CMAKE_CURRENT_BINARY_DIR}/Vulkan${SHADER_NAME}Shader.spv -DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/Vulkan${SHADER_NAME}Shader.hpp -DVARIABLE=vulkan${SHADER_NAME}ShaderSpirv -P ${PROJECT_SOURCE_DIR}/tools/vulkan/EmbedSpirv.cmake
+                               DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/vulkan/${SHADER_NAME}.hlsl ${PROJECT_SOURCE_DIR}/tools/vulkan/EmbedSpirv.cmake
+                               COMMENT "Compiling the Vulkan parity shader ${SHADER_NAME}")
+            list(APPEND SFML_VULKAN_TEST_SHADER_HEADERS ${CMAKE_CURRENT_BINARY_DIR}/Vulkan${SHADER_NAME}Shader.hpp)
+        endforeach()
+        target_sources(test-sfml-graphics-vulkan PRIVATE ${SFML_VULKAN_TEST_SHADER_HEADERS})
+        target_include_directories(test-sfml-graphics-vulkan PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+        target_compile_definitions(test-sfml-graphics-vulkan PRIVATE SFML_TEST_VULKAN_SPIRV_SHADERS)
+    endif()
+endif()
+
 if (XCODE AND SFML_OS_IOS)
     set(GRAPHICS_RESOURCES
         invalid_shader.vert

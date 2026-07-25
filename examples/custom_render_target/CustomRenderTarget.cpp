@@ -353,7 +353,8 @@ private:
 ////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
-    // Use the platform's native renderer when it is available, pass "gl" to force OpenGL
+    // Use the platform's native renderer when it is available, pass "gl" to
+    // force OpenGL or "vulkan" to use the Vulkan renderer
     if (!(argc > 1 && std::string(argv[1]) == "gl"))
     {
 #ifdef SFML_SYSTEM_MACOS
@@ -361,13 +362,16 @@ int main(int argc, char* argv[])
 #else
         constexpr sf::Renderer nativeRenderer = sf::Renderer::Direct3D11;
 #endif
-        sf::setRenderer(nativeRenderer);
-        if (sf::getRenderer() != nativeRenderer)
-            std::cerr << "The native renderer is not available, running on OpenGL instead" << std::endl;
+        const sf::Renderer renderer = (argc > 1 && std::string(argv[1]) == "vulkan") ? sf::Renderer::Vulkan
+                                                                                     : nativeRenderer;
+        sf::setRenderer(renderer);
+        if (sf::getRenderer() != renderer)
+            std::cerr << "The requested renderer is not available, running on OpenGL instead" << std::endl;
     }
 
     const auto* title = sf::getRenderer() == sf::Renderer::Direct3D11 ? "SFML Custom Render Target (Direct3D 11)"
                         : sf::getRenderer() == sf::Renderer::Metal    ? "SFML Custom Render Target (Metal)"
+                        : sf::getRenderer() == sf::Renderer::Vulkan   ? "SFML Custom Render Target (Vulkan)"
                                                                       : "SFML Custom Render Target (OpenGL)";
 
     sf::RenderWindow window(sf::VideoMode({800, 600}), title, sf::Style::Titlebar | sf::Style::Close);
