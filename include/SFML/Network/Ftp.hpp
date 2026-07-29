@@ -48,7 +48,7 @@ class IpAddress;
 /// \deprecated Use `sf::Sftp` if possible.
 ///
 ////////////////////////////////////////////////////////////
-class SFML_NETWORK_API [[deprecated("Use sf::Sftp if possible")]] Ftp
+class SFML_NETWORK_API Ftp
 {
 public:
     ////////////////////////////////////////////////////////////
