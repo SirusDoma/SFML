@@ -1011,7 +1011,7 @@ VmaAllocator VulkanGraphicsDevice::getAllocator() const
 ////////////////////////////////////////////////////////////
 std::size_t VulkanGraphicsDevice::getUniformBufferAlignment() const
 {
-    return std::max<std::size_t>(m_properties.limits.minUniformBufferOffsetAlignment, 16);
+    return std::max<std::size_t>(static_cast<std::size_t>(m_properties.limits.minUniformBufferOffsetAlignment), 16);
 }
 
 
